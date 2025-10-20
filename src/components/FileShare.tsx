@@ -2,13 +2,9 @@ import { useState, useCallback } from 'react';
 import { ArrowLeft, Upload, File, Lock, Clock, Shield, Check, Copy, AlertCircle } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ThemeToggle } from './theme-toggle';
-import { encryptFile, generateSecretId } from '../lib/encryption';
+import { encryptFile } from '../lib/encryption';
 import { createSecret } from '../lib/supabase';
 
 interface FileShareProps {
@@ -25,7 +21,7 @@ export default function FileShare({ onBack }: FileShareProps) {
   const [error, setError] = useState('');
 
   const expiryOptions = [
-    { value: '0.25', label: '15 minutes' },
+    { value: '15', label: '15 minutes' },
     { value: '1', label: '1 hour' },
     { value: '6', label: '6 hours' },
     { value: '24', label: '24 hours' },
@@ -35,9 +31,9 @@ export default function FileShare({ onBack }: FileShareProps) {
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const selectedFile = acceptedFiles[0];
     
-    // Check file size (1MB limit for MVP)
-    if (selectedFile.size > 1024 * 1024) {
-      setError('File size must be less than 1MB for the free tier');
+    // Check file size (5MB limit for free tier)
+    if (selectedFile.size > 5 * 1024 * 1024) {
+      setError('File size must be less than 5MB for the free tier');
       return;
     }
     
@@ -56,7 +52,7 @@ export default function FileShare({ onBack }: FileShareProps) {
       'application/x-zip-compressed': ['.zip']
     },
     multiple: false,
-    maxSize: 1024 * 1024 // 1MB
+    maxSize: 5 * 1024 * 1024 // 5MB
   });
 
   const formatFileSize = (bytes: number): string => {
@@ -82,9 +78,6 @@ export default function FileShare({ onBack }: FileShareProps) {
       const expiryHours = parseFloat(expiry);
       const expiryTime = new Date(Date.now() + expiryHours * 60 * 60 * 1000).toISOString();
       
-      // Generate secret ID
-      const secretId = generateSecretId();
-      
       // Create secret in database
       const { id, error: dbError } = await createSecret({
         type: 'file',
@@ -93,8 +86,7 @@ export default function FileShare({ onBack }: FileShareProps) {
         file_size: file.size,
         expiry_time: expiryTime,
         password_hash: password ? btoa(password) : undefined,
-        encryption_salt: key,
-        view_count: 0
+        encryption_key_or_salt: key,
       });
 
       if (dbError) {
@@ -224,7 +216,7 @@ export default function FileShare({ onBack }: FileShareProps) {
                   </p>
                   <p className="text-muted-foreground">or click to browse</p>
                   <p className="text-sm text-muted-foreground mt-2">
-                    Max 1MB • Images, PDFs, text files supported
+                    Max 5MB • Images, PDFs, text files supported
                   </p>
                 </div>
               )}
@@ -303,10 +295,11 @@ export default function FileShare({ onBack }: FileShareProps) {
             <li>• One-time view only</li>
             <li>• Auto-deletion after expiry</li>
             <li>• No account required</li>
-            <li>• File size limit: 1MB (free tier)</li>
+            <li>• File size limit: 5MB (free tier)</li>
           </ul>
         </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

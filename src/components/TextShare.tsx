@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ThemeToggle } from './theme-toggle';
-import { encryptText, generateSecretId } from '../lib/encryption';
+import { encryptText } from '../lib/encryption';
 import { createSecret } from '../lib/supabase';
 
 interface TextShareProps {
@@ -25,7 +25,7 @@ export default function TextShare({ onBack }: TextShareProps) {
   const [error, setError] = useState('');
 
   const expiryOptions = [
-    { value: '0.25', label: '15 minutes' },
+    { value: '15', label: '15 minutes' },
     { value: '1', label: '1 hour' },
     { value: '6', label: '6 hours' },
     { value: '24', label: '24 hours' },
@@ -47,17 +47,13 @@ export default function TextShare({ onBack }: TextShareProps) {
       const expiryHours = parseFloat(expiry);
       const expiryTime = new Date(Date.now() + expiryHours * 60 * 60 * 1000).toISOString();
       
-      // Generate secret ID
-      const secretId = generateSecretId();
-      
       // Create secret in database
       const { id, error: dbError } = await createSecret({
         type: 'text',
         encrypted_content: encrypted,
         expiry_time: expiryTime,
         password_hash: password ? btoa(password) : undefined,
-        encryption_salt: key,
-        view_count: 0
+        encryption_key_or_salt: key,
       });
 
       if (dbError) {

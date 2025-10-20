@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useAuth, useUser } from '@clerk/clerk-react';
+import { useUser } from '@clerk/clerk-react';
+import { useStore } from '@/lib/store';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,24 +17,25 @@ import {
   Info
 } from 'lucide-react';
 
-import { getUserSubscription, upsertUserSubscription } from '@/lib/supabase';
+import { getUserSubscription, upsertUserSubscription, upgradeToProDev } from '@/lib/supabase';
+import { toast } from 'sonner';
 
 export function SettingsPage() {
   const { user } = useUser();
-  const { userId } = useAuth();
-  const [plan, setPlan] = useState<'free' | 'pro'>('free');
-  const [status, setStatus] = useState('active');
+  const { blinkUserId, userPlan, setUserPlan, subscriptionStatus, setSubscriptionStatus } = useStore();
   const [settings, setSettings] = useState({
     emailNotifications: true,
     securityAlerts: true,
     analyticsTracking: true,
     autoDeleteExpired: true,
-    defaultExpiry: '0.25', // 15 minutes
+    defaultExpiry: '15', // minutes
     maxFileSize: '10', // MB
   });
 
   const [isExporting, setIsExporting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isUpgrading, setIsUpgrading] = useState(false);
+  const [isDowngrading, setIsDowngrading] = useState(false);
 
   const handleSettingChange = (key: string, value: any) => {
     setSettings(prev => ({ ...prev, [key]: value }));
@@ -41,24 +43,62 @@ export function SettingsPage() {
 
   useEffect(() => {
     const loadSub = async () => {
-      if (!userId) return;
-      const { subscription } = await getUserSubscription(userId);
-      setPlan((subscription?.plan as any) || 'free');
-      setStatus(subscription?.status || 'active');
+      if (!blinkUserId) return;
+      const { subscription } = await getUserSubscription(blinkUserId);
+      setUserPlan((subscription?.plan as any) || 'free');
+      setSubscriptionStatus(subscription?.status || 'active');
     };
     loadSub();
-  }, [userId]);
+  }, [blinkUserId, setUserPlan, setSubscriptionStatus]);
 
   const handleUpgrade = async () => {
-    if (!userId) return;
-    await upsertUserSubscription({ user_id: userId, plan: 'pro', status: 'active', current_period_end: undefined });
-    setPlan('pro');
+    if (!blinkUserId) return;
+    
+    setIsUpgrading(true);
+    try {
+      const { success, error } = await upgradeToProDev(blinkUserId);
+      if (success) {
+        setUserPlan('pro');
+        setSubscriptionStatus('active');
+        toast.success('Successfully upgraded to Pro! (Development mode)');
+      } else {
+        toast.error(error || 'Failed to upgrade to Pro');
+      }
+    } catch (err) {
+      toast.error('Failed to upgrade to Pro');
+    } finally {
+      setIsUpgrading(false);
+    }
   };
 
   const handleDowngrade = async () => {
-    if (!userId) return;
-    await upsertUserSubscription({ user_id: userId, plan: 'free', status: 'active', current_period_end: undefined });
-    setPlan('free');
+    if (!blinkUserId) return;
+    
+    setIsDowngrading(true);
+    try {
+      // For free users, we don't need current_period_end
+      const subscriptionData = {
+        user_id: blinkUserId,
+        plan: 'free' as const,
+        status: 'active' as const,
+        updated_at: new Date().toISOString()
+      };
+      
+      const { error } = await upsertUserSubscription(subscriptionData);
+      
+      if (error) {
+        toast.error('Failed to downgrade to Free plan');
+        return;
+      }
+      
+      setUserPlan('free');
+      setSubscriptionStatus('active');
+      toast.success('Successfully downgraded to Free plan');
+    } catch (err) {
+      toast.error('Failed to downgrade to Free plan');
+    } finally {
+      setIsDowngrading(false);
+    }
   };
 
   const handleExportData = async () => {
@@ -154,20 +194,31 @@ export function SettingsPage() {
             </div>
             <div>
               <Label>Plan</Label>
-              <Input value={plan.toUpperCase()} disabled className="mt-1" />
+              <Input value={userPlan?.toUpperCase() || 'FREE'} disabled className="mt-1" />
             </div>
             <div>
               <Label>Status</Label>
-              <Input value={status} disabled className="mt-1" />
+              <Input value={subscriptionStatus || 'active'} disabled className="mt-1" />
             </div>
           </div>
           <div className="flex gap-2">
-            {plan === 'pro' ? (
-              <Button variant="outline" onClick={handleDowngrade}>Downgrade to Free</Button>
+            {userPlan === 'pro' ? (
+              <Button 
+                variant="outline" 
+                onClick={handleDowngrade}
+                disabled={isDowngrading}
+              >
+                {isDowngrading ? 'Downgrading...' : 'Downgrade to Free'}
+              </Button>
             ) : (
-              <Button onClick={handleUpgrade}>Upgrade to Pro</Button>
+              <Button 
+                onClick={handleUpgrade}
+                disabled={isUpgrading}
+                className="bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0 hover:from-purple-600 hover:to-pink-600"
+              >
+                {isUpgrading ? 'Upgrading...' : 'Upgrade to Pro (Dev)'}
+              </Button>
             )}
-            <Button variant="outline">Manage Subscription</Button>
           </div>
         </CardContent>
       </Card>
@@ -263,19 +314,19 @@ export function SettingsPage() {
         <CardContent className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             <div>
-              <Label htmlFor="defaultExpiry">Default Expiry Time (hours)</Label>
+              <Label htmlFor="defaultExpiry">Default Expiry Time (minutes)</Label>
               <Input
                 id="defaultExpiry"
                 type="number"
-                min="0.25"
-                max="168"
-                step="0.25"
+                min="1"
+                max="10080"
+                step="1"
                 value={settings.defaultExpiry}
                 onChange={(e) => handleSettingChange('defaultExpiry', e.target.value)}
                 className="mt-1"
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Minimum: 15 minutes, Maximum: 1 week
+                Minimum: 1 minute, Maximum: 1 week (10080 minutes)
               </p>
             </div>
             <div>

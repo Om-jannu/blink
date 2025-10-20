@@ -13,13 +13,14 @@ import {
   Settings,
   Calendar
 } from 'lucide-react';
-import { getUserSecrets, getUserSubscription } from '@/lib/supabase';
+import { getUserSecrets, getUserSubscription, upgradeToProDev } from '@/lib/supabase';
 import { useStore } from '@/lib/store';
+import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 
 export function Dashboard() {
   const { userId } = useAuth();
-  const { userSecrets, setUserSecrets, setSecretsLoading } = useStore();
+  const { userSecrets, setUserSecrets, setSecretsLoading, blinkUserId, userPlan, setUserPlan, setSubscriptionStatus } = useStore();
   const [stats, setStats] = useState({
     totalSecrets: 0,
     activeSecrets: 0,
@@ -39,15 +40,37 @@ export function Dashboard() {
     }
   }, [userId]);
 
-  const [plan, setPlan] = useState<'free' | 'pro'>('free');
+  const [isUpgrading, setIsUpgrading] = useState(false);
+  
   useEffect(() => {
     const fetchPlan = async () => {
       if (!userId) return;
       const { subscription } = await getUserSubscription(userId);
-      setPlan(subscription?.plan || 'free');
+      setUserPlan(subscription?.plan || 'free');
+      setSubscriptionStatus(subscription?.status || null);
     };
     fetchPlan();
-  }, [userId]);
+  }, [userId, setUserPlan, setSubscriptionStatus]);
+
+  const handleDevUpgrade = async () => {
+    if (!blinkUserId) return;
+    
+    setIsUpgrading(true);
+    try {
+      const { success, error } = await upgradeToProDev(blinkUserId);
+      if (success) {
+        setUserPlan('pro');
+        setSubscriptionStatus('active');
+        toast.success('Successfully upgraded to Pro! (Development mode)');
+      } else {
+        toast.error(error || 'Failed to upgrade to Pro');
+      }
+    } catch (err) {
+      toast.error('Failed to upgrade to Pro');
+    } finally {
+      setIsUpgrading(false);
+    }
+  };
 
   useEffect(() => {
     if (userSecrets.length > 0) {
@@ -132,13 +155,22 @@ export function Dashboard() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant={plan === 'pro' ? 'default' : 'secondary'}>{plan.toUpperCase()}</Badge>
-          <Button variant="outline" onClick={() => (window.location.href = '/dashboard/secrets')}>
-            <Shield className="w-4 h-4 mr-2" /> Upgrade to Pro
-          </Button>
-          <Button variant="outline" onClick={() => (window.location.href = '/dashboard/settings')}>
-            Manage Subscription
-          </Button>
+          <Badge variant={userPlan === 'pro' ? 'default' : 'secondary'}>{userPlan?.toUpperCase() || 'FREE'}</Badge>
+          {userPlan === 'free' ? (
+            <Button 
+              variant="outline" 
+              onClick={handleDevUpgrade}
+              disabled={isUpgrading}
+              className="bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0 hover:from-purple-600 hover:to-pink-600"
+            >
+              <Shield className="w-4 h-4 mr-2" /> 
+              {isUpgrading ? 'Upgrading...' : 'Upgrade to Pro (Dev)'}
+            </Button>
+          ) : (
+            <Button variant="outline" onClick={() => (window.location.href = '/dashboard/settings')}>
+              Manage Subscription
+            </Button>
+          )}
         </div>
       </div>
 

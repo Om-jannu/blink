@@ -14,16 +14,21 @@ export interface DecryptionResult {
  * Encrypts text using AES encryption
  * @param text - The text to encrypt
  * @param password - Optional password for additional security
- * @returns Object containing encrypted text and key
+ * @returns Object containing encrypted text and key/salt
  */
 export function encryptText(text: string, password?: string): EncryptionResult {
-  const key = password || CryptoJS.lib.WordArray.random(256/8).toString();
-  const encrypted = CryptoJS.AES.encrypt(text, key).toString();
-  
-  return {
-    encrypted,
-    key
-  };
+  if (password) {
+    // Password-protected: Generate random salt, derive key from password+salt
+    const salt = CryptoJS.lib.WordArray.random(16).toString();
+    const derivedKey = CryptoJS.PBKDF2(password, salt, { keySize: 256/32, iterations: 100000 }).toString();
+    const encrypted = CryptoJS.AES.encrypt(text, derivedKey).toString();
+    // Return salt (not derived key) - server cannot decrypt without password
+    return { encrypted, key: salt };
+  }
+  // Non-password: Generate random encryption key
+  const randomKey = CryptoJS.lib.WordArray.random(256/8).toString();
+  const encrypted = CryptoJS.AES.encrypt(text, randomKey).toString();
+  return { encrypted, key: randomKey };
 }
 
 /**
@@ -50,14 +55,37 @@ export function decryptText(encryptedText: string, key: string): DecryptionResul
 }
 
 /**
+ * Decrypts text using password-based key derivation
+ * @param encryptedText - The encrypted text
+ * @param password - The password
+ * @param salt - The salt used for key derivation
+ * @returns Object containing decrypted text and success status
+ */
+export function decryptTextWithPassword(encryptedText: string, password: string, salt: string): DecryptionResult {
+  try {
+    const derivedKey = CryptoJS.PBKDF2(password, salt, { keySize: 256/32, iterations: 100000 }).toString();
+    const decrypted = CryptoJS.AES.decrypt(encryptedText, derivedKey).toString(CryptoJS.enc.Utf8);
+    
+    if (!decrypted) {
+      return { decrypted: '', success: false };
+    }
+    
+    return {
+      decrypted,
+      success: true
+    };
+  } catch (error) {
+    return { decrypted: '', success: false };
+  }
+}
+
+/**
  * Encrypts a file using AES encryption
  * @param file - The file to encrypt
  * @param password - Optional password for additional security
- * @returns Promise with encrypted file data and key
+ * @returns Promise with encrypted file data and key/salt
  */
 export async function encryptFile(file: File, password?: string): Promise<EncryptionResult> {
-  const key = password || CryptoJS.lib.WordArray.random(256/8).toString();
-  
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     
@@ -65,12 +93,24 @@ export async function encryptFile(file: File, password?: string): Promise<Encryp
       try {
         const fileData = e.target?.result as ArrayBuffer;
         const wordArray = CryptoJS.lib.WordArray.create(fileData);
-        const encrypted = CryptoJS.AES.encrypt(wordArray, key).toString();
         
-        resolve({
-          encrypted,
-          key
-        });
+        let encrypted: string;
+        let keyOrSalt: string;
+        
+        if (password) {
+          // Password-protected: Generate random salt, derive key from password+salt
+          const salt = CryptoJS.lib.WordArray.random(16).toString();
+          const derivedKey = CryptoJS.PBKDF2(password, salt, { keySize: 256/32, iterations: 100000 }).toString();
+          encrypted = CryptoJS.AES.encrypt(wordArray, derivedKey).toString();
+          keyOrSalt = salt; // Return salt (not derived key)
+        } else {
+          // Non-password: Generate random encryption key
+          const randomKey = CryptoJS.lib.WordArray.random(256/8).toString();
+          encrypted = CryptoJS.AES.encrypt(wordArray, randomKey).toString();
+          keyOrSalt = randomKey;
+        }
+        
+        resolve({ encrypted, key: keyOrSalt });
       } catch (error) {
         reject(error);
       }
@@ -95,6 +135,36 @@ export async function decryptFile(
 ): Promise<File | null> {
   try {
     const decrypted = CryptoJS.AES.decrypt(encryptedData, key);
+    const wordArray = decrypted;
+    
+    if (!wordArray || wordArray.sigBytes === 0) {
+      return null;
+    }
+    
+    const arrayBuffer = wordArrayToArrayBuffer(wordArray);
+    return new File([arrayBuffer], originalFileName);
+  } catch (error) {
+    return null;
+  }
+}
+
+/**
+ * Decrypts a file using password-based key derivation
+ * @param encryptedData - The encrypted file data
+ * @param password - The password
+ * @param salt - The salt used for key derivation
+ * @param originalFileName - The original file name
+ * @returns Promise with decrypted file or null if decryption fails
+ */
+export async function decryptFileWithPassword(
+  encryptedData: string, 
+  password: string, 
+  salt: string, 
+  originalFileName: string
+): Promise<File | null> {
+  try {
+    const derivedKey = CryptoJS.PBKDF2(password, salt, { keySize: 256/32, iterations: 100000 }).toString();
+    const decrypted = CryptoJS.AES.decrypt(encryptedData, derivedKey);
     const wordArray = decrypted;
     
     if (!wordArray || wordArray.sigBytes === 0) {

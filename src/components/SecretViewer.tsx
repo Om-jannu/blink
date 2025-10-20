@@ -1,20 +1,23 @@
 import { useState, useEffect } from 'react';
-import { Shield, Download, Eye, AlertCircle, Lock, Clock, FileText, File } from 'lucide-react';
+import { Shield, Download, Eye, AlertCircle, Lock, FileText, File } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ThemeToggle } from './theme-toggle';
-import { decryptText, decryptFile } from '../lib/encryption';
+import { decryptText, decryptFile, decryptTextWithPassword, decryptFileWithPassword } from '../lib/encryption';
 import { getSecret, markSecretAsViewed, deleteSecret, isSecretExpired } from '../lib/supabase';
 
 interface SecretViewerProps {
   secretId: string;
-  encryptionKey: string;
+  encryptionKey: string; // Still needed for URL compatibility, but not used for decryption
 }
 
 export default function SecretViewer({ secretId, encryptionKey }: SecretViewerProps) {
+  // Note: encryptionKey is kept for URL compatibility but not used for decryption
+  // as we now get the salt/key from the database for better security
+  console.log('SecretViewer initialized with encryptionKey:', encryptionKey ? 'present' : 'missing');
   const [secret, setSecret] = useState<any>(null);
   const [decryptedContent, setDecryptedContent] = useState<string | File | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -63,7 +66,8 @@ export default function SecretViewer({ secretId, encryptionKey }: SecretViewerPr
       }
 
       // Decrypt content if no password required
-      await decryptContent(secretData, encryptionKey);
+      // For non-password secrets, use encryption key from database
+      await decryptContent(secretData, secretData.encryption_key_or_salt, false);
       
     } catch (err) {
       setError('Failed to load secret');
@@ -72,12 +76,20 @@ export default function SecretViewer({ secretId, encryptionKey }: SecretViewerPr
     }
   };
 
-  const decryptContent = async (secretData: any, key: string) => {
+  const decryptContent = async (secretData: any, keyOrPassword: string, isPasswordProtected: boolean = false) => {
     try {
       let decrypted: string | File | null = null;
 
       if (secretData.type === 'text') {
-        const result = decryptText(secretData.encrypted_content, key);
+        let result;
+        if (isPasswordProtected) {
+          // For password-protected secrets, use password + salt from database
+          result = decryptTextWithPassword(secretData.encrypted_content, keyOrPassword, secretData.encryption_key_or_salt);
+        } else {
+          // For non-password secrets, use encryption key directly
+          result = decryptText(secretData.encrypted_content, keyOrPassword);
+        }
+        
         if (result.success) {
           decrypted = result.decrypted;
         } else {
@@ -85,7 +97,14 @@ export default function SecretViewer({ secretId, encryptionKey }: SecretViewerPr
           return;
         }
       } else if (secretData.type === 'file') {
-        decrypted = await decryptFile(secretData.encrypted_content, key, secretData.file_name);
+        if (isPasswordProtected) {
+          // For password-protected secrets, use password + salt from database
+          decrypted = await decryptFileWithPassword(secretData.encrypted_content, keyOrPassword, secretData.encryption_key_or_salt, secretData.file_name);
+        } else {
+          // For non-password secrets, use encryption key directly
+          decrypted = await decryptFile(secretData.encrypted_content, keyOrPassword, secretData.file_name);
+        }
+        
         if (!decrypted) {
           setError('Failed to decrypt file. Invalid key or corrupted data.');
           return;
@@ -119,8 +138,8 @@ export default function SecretViewer({ secretId, encryptionKey }: SecretViewerPr
         return;
       }
 
-      // Decrypt content with password
-      await decryptContent(secret, password);
+      // For password-protected secrets, use password + salt from database
+      await decryptContent(secret, password, true);
       
     } catch (err) {
       setError('Failed to decrypt content');

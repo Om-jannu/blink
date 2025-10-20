@@ -2,15 +2,21 @@ import { useState } from 'react';
 import { UserButton } from '@clerk/clerk-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { 
   LayoutDashboard, 
   Eye, 
   Settings, 
   Menu, 
   X,
-  Shield
+  Shield,
+  Crown
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useStore } from '@/lib/store';
+import { upgradeToProDev } from '@/lib/supabase';
+import { toast } from 'sonner';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -36,8 +42,31 @@ const navigation = [
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isUpgrading, setIsUpgrading] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const { userPlan, blinkUserId, setUserPlan, setSubscriptionStatus } = useStore();
+
+  const handleUpgrade = async () => {
+    if (!blinkUserId) return;
+    
+    setIsUpgrading(true);
+    try {
+      const { success, error } = await upgradeToProDev(blinkUserId);
+      if (success) {
+        setUserPlan('pro');
+        setSubscriptionStatus('active');
+        toast.success('Successfully upgraded to Pro! (Development mode)');
+        window.location.reload();
+      } else {
+        toast.error(error || 'Failed to upgrade to Pro');
+      }
+    } catch (err) {
+      toast.error('Failed to upgrade to Pro');
+    } finally {
+      setIsUpgrading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -87,9 +116,36 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               })}
             </nav>
             <div className="border-t p-4">
-              <div className="flex items-center space-x-3">
-                <UserButton />
-              </div>
+              {userPlan === 'free' ? (
+                <Card className="border-0 shadow-none bg-gradient-to-r from-purple-500/10 to-pink-500/10">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center space-x-2">
+                      <Crown className="w-4 h-4 text-purple-600" />
+                      <CardTitle className="text-sm">Upgrade to Pro</CardTitle>
+                    </div>
+                    <CardDescription className="text-xs">
+                      Unlock unlimited secrets and advanced features
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <Button
+                      size="sm"
+                      className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0 hover:from-purple-600 hover:to-pink-600"
+                      onClick={handleUpgrade}
+                      disabled={isUpgrading}
+                    >
+                      {isUpgrading ? 'Upgrading...' : 'Upgrade Now'}
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="flex items-center space-x-3">
+                  <Badge variant="default" className="bg-gradient-to-r from-purple-500 to-pink-500">
+                    <Crown className="w-3 h-3 mr-1" />
+                    Pro
+                  </Badge>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -128,9 +184,36 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               })}
             </ul>
             <div className="border-t p-4">
-              <div className="flex items-center space-x-3">
-                <UserButton afterSignOutUrl="/" />
-              </div>
+              {userPlan === 'free' ? (
+                <Card className="border-0 shadow-none bg-gradient-to-r from-purple-500/10 to-pink-500/10">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center space-x-2">
+                      <Crown className="w-4 h-4 text-purple-600" />
+                      <CardTitle className="text-sm">Upgrade to Pro</CardTitle>
+                    </div>
+                    <CardDescription className="text-xs">
+                      Unlock unlimited secrets and advanced features
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <Button
+                      size="sm"
+                      className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0 hover:from-purple-600 hover:to-pink-600"
+                      onClick={handleUpgrade}
+                      disabled={isUpgrading}
+                    >
+                      {isUpgrading ? 'Upgrading...' : 'Upgrade Now'}
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="flex items-center space-x-3">
+                  <Badge variant="default" className="bg-gradient-to-r from-purple-500 to-pink-500">
+                    <Crown className="w-3 h-3 mr-1" />
+                    Pro
+                  </Badge>
+                </div>
+              )}
             </div>
           </nav>
         </div>

@@ -33,31 +33,37 @@ import {
   Trash2,
   Search,
   Clock,
-  RotateCw
+  RotateCw,
+  Download
 } from 'lucide-react';
 import { useStore } from '@/lib/store';
-import { encryptText, encryptFile, decryptText, decryptFile } from '@/lib/encryption';
-import { createSecret, getUserSecrets, deleteSecret, cleanupExpiredSecrets, expireSecretNow, getUserSubscription } from '@/lib/supabase';
+import { cn } from '@/lib/utils';
+import { encryptText, encryptFile } from '@/lib/encryption';
+import { createSecret, getUserSecrets, deleteSecret, cleanupExpiredSecrets, expireSecretNow, renewSecretExpiry, getUserSubscription } from '@/lib/supabase';
 import { validateFileName } from '@/lib/validation';
 import { useDropzone } from 'react-dropzone';
+import { toast } from 'sonner';
 
 export function MySecretsPage() {
   const { userId } = useAuth();
-  const { activeTab, setActiveTab } = useStore();
+  const { activeTab, setActiveTab, blinkUserId, userPlan } = useStore();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
   // Create secret state
   const [text, setText] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [password, setPassword] = useState('');
-  const [expiry, setExpiry] = useState('0.25');
+  const [expiry, setExpiry] = useState('15');
   const [customExpiry, setCustomExpiry] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [secretUrl, setSecretUrl] = useState('');
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [previewContent, setPreviewContent] = useState<{ type: 'text' | 'file'; title: string; body?: string; fileUrl?: string } | null>(null);
+  const [previewContent, setPreviewContent] = useState<{ type: 'text' | 'file'; title: string; body?: string; fileUrl?: string; fileSize?: number; fileName?: string } | null>(null);
+  const [previewPassword, setPreviewPassword] = useState('');
+  const [previewPasswordRequired, setPreviewPasswordRequired] = useState(false);
+  const [previewSecret, setPreviewSecret] = useState<any>(null);
   const [isCommandOpen, setIsCommandOpen] = useState(false);
   const [page, setPage] = useState(1);
   const pageSize = 10;
@@ -70,9 +76,9 @@ export function MySecretsPage() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   const { userSecrets, setUserSecrets, setSecretsLoading } = useStore();
-  const [objectUrls, setObjectUrls] = useState<string[]>([]);
+  const [objectUrls] = useState<string[]>([]);
   const [plan, setPlan] = useState<'free' | 'pro'>('free');
-  const maxFileSizeBytes = plan === 'pro' ? 50 * 1024 * 1024 : 5 * 1024 * 1024; // 50MB vs 5MB
+  const maxFileSizeBytes = plan === 'pro' ? 50 * 1024 * 1024 : 5 * 1024 * 1024; // 50MB (pro) vs 5MB (free)
 
   useEffect(() => {
     return () => {
@@ -81,7 +87,7 @@ export function MySecretsPage() {
   }, [objectUrls]);
 
   const expiryOptions = [
-    { value: '0.25', label: '15 minutes' },
+    { value: '15', label: '15 minutes' },
     { value: '1', label: '1 hour' },
     { value: '6', label: '6 hours' },
     { value: '24', label: '1 day' },
@@ -90,10 +96,10 @@ export function MySecretsPage() {
   ];
 
   useEffect(() => {
-    if (userId) {
+    if (blinkUserId) {
       loadUserSecrets();
     }
-  }, [userId]);
+  }, [blinkUserId]);
 
   useEffect(() => {
     const fetchPlan = async () => {
@@ -116,11 +122,11 @@ export function MySecretsPage() {
   }, []);
 
   const loadUserSecrets = async () => {
-    if (!userId) return;
+    if (!blinkUserId) return;
 
     setSecretsLoading(true);
     try {
-      const { secrets, error } = await getUserSecrets(userId);
+      const { secrets, error } = await getUserSecrets(blinkUserId);
       if (error) {
         console.error('Failed to load user secrets:', error);
         return;
@@ -143,6 +149,34 @@ export function MySecretsPage() {
       }
     } catch (error) {
       console.error('Failed to delete secret:', error);
+    }
+  };
+
+  const handleRenewExpiry = async (secretId: string) => {
+    try {
+      // Client-side validation: Check if secret is already expired
+      const secret = userSecrets.find(s => s.id === secretId);
+      if (secret && new Date(secret.expiry_time) < new Date()) {
+        toast.error('Cannot renew expiry for an already expired secret');
+        return;
+      }
+
+      // Add 15 minutes to current time (default renewal)
+      const newExpiryTime = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+      const { success, error } = await renewSecretExpiry(secretId, newExpiryTime);
+      if (success) {
+        // Update the secret in the local state
+        setUserSecrets(userSecrets.map(s => 
+          s.id === secretId 
+            ? { ...s, expiry_time: newExpiryTime }
+            : s
+        ));
+        toast.success('Secret expiry renewed for 15 minutes');
+      } else {
+        toast.error(error || 'Failed to renew secret expiry');
+      }
+    } catch (err) {
+      toast.error('Failed to renew secret expiry');
     }
   };
 
@@ -192,7 +226,7 @@ export function MySecretsPage() {
     setText('');
     setFile(null);
     setPassword('');
-    setExpiry('0.25');
+    setExpiry('15');
     setCustomExpiry('');
     setSecretUrl('');
     setError('');
@@ -225,6 +259,12 @@ export function MySecretsPage() {
         setError(validation.error || 'Invalid file name');
         return;
       }
+    }
+
+    // Client-side validation: Free users cannot use passwords
+    if (userPlan !== 'pro' && password.trim()) {
+      toast.error('Password protection is only available for Pro users. Please upgrade to use this feature.');
+      return;
     }
 
     setIsLoading(true);
@@ -268,29 +308,33 @@ export function MySecretsPage() {
         const result = encryptText(text, password || undefined);
         encrypted = result.encrypted;
         key = result.key;
-        // Enforce free/pro text count limits
-        const textCount = userSecrets.filter((s) => s.type === 'text').length;
-        if (plan === 'free' && textCount >= 20) {
-          setError('Free plan limit reached: 20 text secrets');
-          return;
+        // Enforce free plan text count limit (10)
+        if (blinkUserId) {
+          const textCount = userSecrets.filter((s) => s.type === 'text').length;
+          if (plan === 'free' && textCount >= 10) {
+            setError('Free plan limit reached: 10 text secrets');
+            return;
+          }
         }
         secretData = {
           type: 'text',
           encrypted_content: encrypted,
           expiry_time: new Date(Date.now() + expiryHours * 60 * 60 * 1000).toISOString(),
           password_hash: password ? btoa(password) : undefined,
-          encryption_salt: key,
-          owner_id: userId || undefined
+          encryption_key_or_salt: key,
+          owner_user_id: blinkUserId || undefined
         };
       } else {
         const result = await encryptFile(file!, password || undefined);
         encrypted = result.encrypted;
         key = result.key;
-        // Enforce free/pro file count limits
-        const fileCount = userSecrets.filter((s) => s.type === 'file').length;
-        if (plan === 'free' && fileCount >= 5) {
-          setError('Free plan limit reached: 5 file secrets');
-          return;
+        // Enforce free plan file count limit (5)
+        if (blinkUserId) {
+          const fileCount = userSecrets.filter((s) => s.type === 'file').length;
+          if (plan === 'free' && fileCount >= 5) {
+            setError('Free plan limit reached: 5 file secrets');
+            return;
+          }
         }
         secretData = {
           type: 'file',
@@ -299,21 +343,16 @@ export function MySecretsPage() {
           file_size: file!.size,
           expiry_time: new Date(Date.now() + expiryHours * 60 * 60 * 1000).toISOString(),
           password_hash: password ? btoa(password) : undefined,
-          encryption_salt: key,
-          owner_id: userId || undefined
+          encryption_key_or_salt: key,
+          owner_user_id: blinkUserId || undefined
         };
-      }
-
-      // Enforce total limits for free plan
-      const totalCount = userSecrets.length;
-      if (plan === 'free' && totalCount >= 25) {
-        setError('Free plan limit reached: 25 total secrets');
-        return;
       }
 
       const { id, error: dbError } = await createSecret(secretData);
 
       if (dbError) throw new Error(dbError);
+
+      // Encryption key is now stored in the database
 
       const secretUrl = `${window.location.origin}/view/${id}#${encodeURIComponent(key)}`;
       setSecretUrl(secretUrl);
@@ -370,59 +409,152 @@ export function MySecretsPage() {
   const end = start + pageSize;
   const paginatedSecrets = filteredSecrets.slice(start, end);
 
-  const copySecretUrl = async (secretId: string, key?: string) => {
-    const url = key
-      ? `${window.location.origin}/view/${secretId}#${encodeURIComponent(key)}`
-      : `${window.location.origin}/view/${secretId}`;
-    try {
-      await navigator.clipboard.writeText(url);
-      // You could add a toast notification here
-    } catch (err) {
-      console.error('Failed to copy:', err);
+  const copySecretUrl = async (secretId: string) => {
+    // Get the encryption key from the database
+    const secret = userSecrets.find(s => s.id === secretId);
+    
+    if (secret && secret.encryption_key_or_salt) {
+      // Include the encryption key/salt in the URL
+      const url = `${window.location.origin}/view/${secretId}#${encodeURIComponent(secret.encryption_key_or_salt)}`;
+      try {
+        await navigator.clipboard.writeText(url);
+        toast.success('Secret link copied to clipboard');
+      } catch (err) {
+        toast.error('Failed to copy link');
+      }
+    } else {
+      // No encryption key found, copy without it (will require password if protected)
+      const url = `${window.location.origin}/view/${secretId}`;
+      try {
+        await navigator.clipboard.writeText(url);
+        toast.success('Secret link copied to clipboard (password required if protected)');
+      } catch (err) {
+        toast.error('Failed to copy link');
+      }
     }
   };
 
   // openSecretUrl removed as per requirement
 
-  const getMimeFromName = (name?: string): string => {
-    if (!name) return 'application/octet-stream';
-    const lower = name.toLowerCase();
-    if (lower.endsWith('.png')) return 'image/png';
-    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
-    if (lower.endsWith('.gif')) return 'image/gif';
-    if (lower.endsWith('.webp')) return 'image/webp';
-    if (lower.endsWith('.pdf')) return 'application/pdf';
-    if (lower.endsWith('.txt')) return 'text/plain';
-    return 'application/octet-stream';
-  };
 
   const handlePreview = async (secret: any) => {
     try {
-      if (secret.type === 'text') {
-        const result = decryptText(secret.encrypted_content, secret.encryption_salt);
-        setPreviewContent({ type: 'text', title: 'Text Secret', body: result.success ? result.decrypted : '[Decryption failed]' });
+      // Check if secret is password-protected
+      if (secret.password_hash) {
+        // For password-protected secrets, prompt for password
+        setPreviewSecret(secret);
+        setPreviewPasswordRequired(true);
+        setPreviewPassword('');
         setPreviewOpen(true);
-      } else {
-        const file = await decryptFile(secret.encrypted_content, secret.encryption_salt, secret.file_name || 'file');
-        if (file) {
-          const mime = getMimeFromName(file.name);
-          const blob = new Blob([await file.arrayBuffer()], { type: mime });
-          const url = URL.createObjectURL(blob);
-          setObjectUrls((prev) => [...prev, url]);
-          setPreviewContent({ type: 'file', title: file.name, fileUrl: url });
-        } else {
-          setPreviewContent({ type: 'file', title: secret.file_name || 'File Secret', fileUrl: undefined });
-        }
-        setPreviewOpen(true);
+        return;
       }
-    } catch (e) {
-      console.error('Preview failed', e);
-      setPreviewContent({ type: secret.type, title: isFile(secret) ? (secret.file_name || 'File Secret') : 'Text Secret', body: '[Decryption failed]' });
+
+      // For non-password-protected secrets, decrypt directly
+      await decryptAndPreview(secret);
+    } catch (error) {
+      setPreviewContent({ 
+        type: secret.type, 
+        title: secret.type === 'file' ? (secret.file_name || 'File Secret') : 'Text Secret', 
+        body: '[Preview failed - error occurred]' 
+      });
       setPreviewOpen(true);
     }
   };
 
-  const isFile = (s: any) => s.type === 'file';
+  const decryptAndPreview = async (secret: any, password?: string) => {
+    try {
+      if (secret.type === 'text') {
+        // For text secrets, decrypt and show preview
+        const { decryptText, decryptTextWithPassword } = await import('@/lib/encryption');
+        let result;
+        
+        if (password) {
+          result = decryptTextWithPassword(secret.encrypted_content, password, secret.encryption_key_or_salt);
+        } else {
+          result = decryptText(secret.encrypted_content, secret.encryption_key_or_salt);
+        }
+        
+        if (result.success) {
+          setPreviewContent({ 
+            type: 'text', 
+            title: 'Text Secret', 
+            body: result.decrypted 
+          });
+        } else {
+          setPreviewContent({ 
+            type: 'text', 
+            title: 'Text Secret', 
+            body: '[Preview failed - unable to decrypt]' 
+          });
+        }
+      } else if (secret.type === 'file') {
+        // For file secrets, decrypt and create preview
+        const { decryptFile, decryptFileWithPassword } = await import('@/lib/encryption');
+        let decryptedFile;
+        
+        if (password) {
+          decryptedFile = await decryptFileWithPassword(secret.encrypted_content, password, secret.encryption_key_or_salt, secret.file_name || 'file');
+        } else {
+          decryptedFile = await decryptFile(secret.encrypted_content, secret.encryption_key_or_salt, secret.file_name || 'file');
+        }
+        
+        if (decryptedFile) {
+          // Create object URL for preview
+          const fileUrl = URL.createObjectURL(decryptedFile);
+          
+          setPreviewContent({ 
+            type: 'file', 
+            title: secret.file_name || 'File Secret', 
+            body: fileUrl, // Store the object URL for preview
+            fileSize: secret.file_size || 0,
+            fileName: secret.file_name || 'file'
+          });
+        } else {
+          setPreviewContent({ 
+            type: 'file', 
+            title: secret.file_name || 'File Secret', 
+            body: '[Preview failed - unable to decrypt file]' 
+          });
+        }
+      }
+      setPreviewOpen(true);
+    } catch (error) {
+      setPreviewContent({ 
+        type: secret.type, 
+        title: secret.type === 'file' ? (secret.file_name || 'File Secret') : 'Text Secret', 
+        body: '[Preview failed - error occurred]' 
+      });
+      setPreviewOpen(true);
+    }
+  };
+
+  const handlePreviewPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!previewSecret || !previewPassword.trim()) return;
+    
+    try {
+      await decryptAndPreview(previewSecret, previewPassword);
+      setPreviewPasswordRequired(false);
+      setPreviewPassword('');
+      setPreviewSecret(null);
+    } catch (error) {
+      toast.error('Failed to decrypt with provided password');
+    }
+  };
+
+  const handleClosePreview = () => {
+    // Clean up object URLs to prevent memory leaks
+    if (previewContent?.body && previewContent.body.startsWith('blob:')) {
+      URL.revokeObjectURL(previewContent.body);
+    }
+    setPreviewOpen(false);
+    setPreviewContent(null);
+    setPreviewPasswordRequired(false);
+    setPreviewPassword('');
+    setPreviewSecret(null);
+  };
+
+
 
   return (
     <div className="space-y-6">
@@ -508,8 +640,26 @@ export function MySecretsPage() {
                     </div>
                     <div className="grid gap-4 md:grid-cols-2">
                       <div>
-                        <Label htmlFor="password">Password (Optional)</Label>
-                        <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Add password protection" />
+                        <Label htmlFor="password">
+                          {userPlan === 'pro' ? 'Password (Optional)' : 'Password Protection'}
+                        </Label>
+                        <div className={cn(
+                          "relative",
+                          userPlan !== 'pro' && "after:absolute after:inset-0 after:bg-gradient-to-r after:from-purple-500/20 after:via-pink-500/20 after:to-blue-500/20 after:rounded-md after:blur-sm"
+                        )}>
+                          <Input
+                            id="password"
+                            type="password"
+                            value={userPlan === 'pro' ? password : ''}
+                            onChange={userPlan === 'pro' ? (e) => setPassword(e.target.value) : undefined}
+                            disabled={userPlan !== 'pro'}
+                            placeholder={userPlan === 'pro' ? 'Add password protection' : 'Pro feature - Upgrade to use passwords'}
+                            className={cn(
+                              "relative",
+                              userPlan !== 'pro' && "bg-gray-100 dark:bg-gray-800 border-2 border-transparent bg-clip-padding"
+                            )}
+                          />
+                        </div>
                       </div>
                       <div>
                         <Label htmlFor="expiry">Expiry Time</Label>
@@ -562,15 +712,33 @@ export function MySecretsPage() {
                         ) : (
                           <div>
                             <p className="font-medium">{isDragActive ? 'Drop the file here' : 'Drag & drop a file here, or click to select'}</p>
-                            <p className="text-sm text-muted-foreground">Maximum file size: 10MB</p>
+                            <p className="text-sm text-muted-foreground">Maximum file size: {plan === 'pro' ? '50MB' : '5MB'}</p>
                           </div>
                         )}
                       </div>
                     </div>
                     <div className="grid gap-4 md:grid-cols-2">
                       <div>
-                        <Label htmlFor="file-password">Password (Optional)</Label>
-                        <Input id="file-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Add password protection" />
+                        <Label htmlFor="file-password">
+                          {userPlan === 'pro' ? 'Password (Optional)' : 'Password Protection'}
+                        </Label>
+                        <div className={cn(
+                          "relative",
+                          userPlan !== 'pro' && "after:absolute after:inset-0 after:bg-gradient-to-r after:from-purple-500/20 after:via-pink-500/20 after:to-blue-500/20 after:rounded-md after:blur-sm"
+                        )}>
+                          <Input
+                            id="file-password"
+                            type="password"
+                            value={userPlan === 'pro' ? password : ''}
+                            onChange={userPlan === 'pro' ? (e) => setPassword(e.target.value) : undefined}
+                            disabled={userPlan !== 'pro'}
+                            placeholder={userPlan === 'pro' ? 'Add password protection' : 'Pro feature - Upgrade to use passwords'}
+                            className={cn(
+                              "relative",
+                              userPlan !== 'pro' && "bg-gray-100 dark:bg-gray-800 border-2 border-transparent bg-clip-padding"
+                            )}
+                          />
+                        </div>
                       </div>
                       <div>
                         <Label htmlFor="file-expiry">Expiry Time</Label>
@@ -779,22 +947,48 @@ export function MySecretsPage() {
                         <Button variant="outline" size="sm">Actions</Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => copySecretUrl(secret.id, secret.encryption_salt)}>
+                        <DropdownMenuItem onClick={() => copySecretUrl(secret.id)}>
                           <Copy className="w-4 h-4 mr-2" /> Copy link
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => handlePreview(secret)}>
                           <Eye className="w-4 h-4 mr-2" /> Preview
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={async () => {
-                          const { success, error } = await expireSecretNow(secret.id);
-                          if (success) {
-                            await loadUserSecrets();
-                          } else {
-                            console.error('Expire failed', error);
-                          }
-                        }}>
-                          <Clock className="w-4 h-4 mr-2" /> Expire Now
-                        </DropdownMenuItem>
+                        {userPlan === 'pro' ? (
+                          <>
+                            <DropdownMenuItem onClick={async () => {
+                              const { success, error } = await expireSecretNow(secret.id);
+                              if (success) {
+                                await loadUserSecrets();
+                              } else {
+                                console.error('Expire failed', error);
+                              }
+                            }}>
+                              <Clock className="w-4 h-4 mr-2" /> Expire Now
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleRenewExpiry(secret.id)}>
+                              <RotateCw className="w-4 h-4 mr-2" /> Renew Expiry
+                            </DropdownMenuItem>
+                          </>
+                        ) : (
+                          <>
+                            <DropdownMenuItem disabled className="opacity-50">
+                              <div className="flex items-center justify-between w-full">
+                                <div className="flex items-center">
+                                  <Clock className="w-4 h-4 mr-2" /> Expire Now
+                                </div>
+                                <span className="text-xs bg-gradient-to-r from-purple-500 to-pink-500 text-white px-2 py-1 rounded">Pro</span>
+                              </div>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem disabled className="opacity-50">
+                              <div className="flex items-center justify-between w-full">
+                                <div className="flex items-center">
+                                  <RotateCw className="w-4 h-4 mr-2" /> Renew Expiry
+                                </div>
+                                <span className="text-xs bg-gradient-to-r from-purple-500 to-pink-500 text-white px-2 py-1 rounded">Pro</span>
+                              </div>
+                            </DropdownMenuItem>
+                          </>
+                        )}
                         <DropdownMenuItem onClick={() => handleDeleteSecret(secret.id)} className="text-destructive">
                           <Trash2 className="w-4 h-4 mr-2" /> Delete
                         </DropdownMenuItem>
@@ -818,7 +1012,7 @@ export function MySecretsPage() {
     </Card>
       </div>
     {/* Preview Dialog */}
-    <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+    <Dialog open={previewOpen} onOpenChange={(open) => !open && handleClosePreview()}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>{previewContent?.title || 'Preview'}</DialogTitle>
@@ -826,26 +1020,70 @@ export function MySecretsPage() {
             Owner-only preview. Note: full decryption requires the original key embedded in the share URL.
           </DialogDescription>
         </DialogHeader>
-        {previewContent?.type === 'text' && (
+        
+        {previewPasswordRequired ? (
+          <div className="space-y-4">
+            <div className="text-center py-4">
+              <div className="w-16 h-16 mx-auto mb-4 bg-muted rounded-full flex items-center justify-center">
+                <Shield className="w-8 h-8 text-muted-foreground" />
+              </div>
+              <h3 className="text-lg font-medium mb-2">Password Required</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                This secret is password protected. Enter the password to preview.
+              </p>
+            </div>
+            <form onSubmit={handlePreviewPasswordSubmit} className="space-y-4">
+              <div>
+                <Label htmlFor="preview-password">Password</Label>
+                <Input
+                  id="preview-password"
+                  type="password"
+                  value={previewPassword}
+                  onChange={(e) => setPreviewPassword(e.target.value)}
+                  placeholder="Enter password"
+                  required
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={handleClosePreview}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={!previewPassword.trim()}>
+                  Decrypt & Preview
+                </Button>
+              </div>
+            </form>
+          </div>
+        ) : previewContent?.type === 'text' && (
           <div className="whitespace-pre-wrap text-sm bg-muted p-4 rounded border">
             {previewContent.body ?? ''}
           </div>
         )}
         {previewContent?.type === 'file' && (
-          previewContent.fileUrl ? (
-            <div className="space-y-3">
-              {previewContent.title.toLowerCase().endsWith('.pdf') ? (
-                <iframe src={previewContent.fileUrl} className="w-full h-[60vh] border rounded" />
-              ) : previewContent.title.match(/\.(png|jpe?g|gif|webp)$/i) ? (
-                <img src={previewContent.fileUrl} alt={previewContent.title} className="max-h-[60vh] rounded border" />
-              ) : (
-                <div className="text-sm text-muted-foreground">Preview not supported. You can download the file below.</div>
-              )}
-              <div className="flex justify-end gap-2">
-                <a href={previewContent.fileUrl} download={previewContent.title}>
-                  <Button>Download</Button>
+          previewContent.body && previewContent.body.startsWith('blob:') ? (
+            <div className="space-y-4">
+              <div className="text-center py-8">
+                <div className="w-16 h-16 mx-auto mb-4 bg-muted rounded-full flex items-center justify-center">
+                  <Upload className="w-8 h-8 text-muted-foreground" />
+                </div>
+                <h3 className="text-lg font-medium mb-2">{previewContent.title}</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  File size: {formatFileSize(previewContent.fileSize || 0)}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Click download to save this file to your device.
+                </p>
+              </div>
+              <div className="flex justify-center gap-2">
+                <a href={previewContent.body} download={previewContent.title}>
+                  <Button className="w-full">
+                    <Download className="w-4 h-4 mr-2" />
+                    Download File
+                  </Button>
                 </a>
-          <Button variant="outline" onClick={() => setPreviewOpen(false)}>Close</Button>
+                <Button variant="outline" onClick={handleClosePreview}>
+                  Close
+                </Button>
               </div>
             </div>
           ) : (

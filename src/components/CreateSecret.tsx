@@ -16,24 +16,24 @@ import {
   Copy, 
   Check, 
   AlertCircle,
-  Download,
   ExternalLink
 } from 'lucide-react';
 import { useStore } from '@/lib/store';
-import { encryptText, encryptFile, decryptText, decryptFile } from '@/lib/encryption';
+import { cn } from '@/lib/utils';
+import { encryptText, encryptFile } from '@/lib/encryption';
 import { createSecret, cleanupExpiredSecrets } from '@/lib/supabase';
 import { validateFileName } from '@/lib/validation';
 import { useDropzone } from 'react-dropzone';
 
 export function CreateSecret() {
-  const { isSignedIn, userId } = useAuth();
-  const { activeTab, setActiveTab } = useStore();
+  const { userId } = useAuth();
+  const { activeTab, setActiveTab, userPlan } = useStore();
   
   // Form state
   const [text, setText] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [password, setPassword] = useState('');
-  const [expiry, setExpiry] = useState('0.25');
+  const [expiry, setExpiry] = useState('15');
   const [customExpiry, setCustomExpiry] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [secretUrl, setSecretUrl] = useState('');
@@ -41,7 +41,7 @@ export function CreateSecret() {
   const [error, setError] = useState('');
 
   const expiryOptions = [
-    { value: '0.25', label: '15 minutes' },
+    { value: '15', label: '15 minutes' },
     { value: '1', label: '1 hour' },
     { value: '6', label: '6 hours' },
     { value: '24', label: '1 day' },
@@ -62,7 +62,16 @@ export function CreateSecret() {
   }, []);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop: (acceptedFiles) => {
+    onDrop: (acceptedFiles, rejectedFiles) => {
+      if (rejectedFiles.length > 0) {
+        const rejection = rejectedFiles[0];
+        if (rejection.errors.some(e => e.code === 'file-too-large')) {
+          const maxSize = userPlan === 'pro' ? 50 : 5;
+          setError(`File size exceeds ${maxSize}MB limit for ${userPlan === 'pro' ? 'Pro' : 'Free'} users.`);
+          return;
+        }
+      }
+      
       if (acceptedFiles.length > 0) {
         const file = acceptedFiles[0];
         
@@ -78,7 +87,7 @@ export function CreateSecret() {
       }
     },
     maxFiles: 1,
-    maxSize: 10 * 1024 * 1024, // 10MB limit
+    maxSize: userPlan === 'pro' ? 50 * 1024 * 1024 : 5 * 1024 * 1024, // 50MB (pro) vs 5MB (free)
   });
 
   const formatFileSize = (bytes: number) => {
@@ -93,11 +102,12 @@ export function CreateSecret() {
     setText('');
     setFile(null);
     setPassword('');
-    setExpiry('0.25');
+    setExpiry('15');
     setCustomExpiry('');
     setSecretUrl('');
     setError('');
   };
+
 
   const copyToClipboard = async () => {
     try {
@@ -126,6 +136,12 @@ export function CreateSecret() {
         setError(validation.error || 'Invalid file name');
         return;
       }
+    }
+
+    // Client-side validation: Free users cannot use passwords
+    if (userPlan !== 'pro' && password.trim()) {
+      setError('Password protection is only available for Pro users. Please upgrade to use this feature.');
+      return;
     }
 
     setIsLoading(true);
@@ -161,7 +177,7 @@ export function CreateSecret() {
           encrypted_content: encrypted,
           expiry_time: new Date(Date.now() + expiryHours * 60 * 60 * 1000).toISOString(),
           password_hash: password ? btoa(password) : undefined,
-          encryption_salt: key,
+          encryption_key_or_salt: key,
           owner_id: userId || undefined
         };
       } else {
@@ -175,7 +191,7 @@ export function CreateSecret() {
           file_size: file!.size,
           expiry_time: new Date(Date.now() + expiryHours * 60 * 60 * 1000).toISOString(),
           password_hash: password ? btoa(password) : undefined,
-          encryption_salt: key,
+          encryption_key_or_salt: key,
           owner_id: userId || undefined
         };
       }
@@ -284,14 +300,26 @@ export function CreateSecret() {
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <Label htmlFor="password">Password (Optional)</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Add password protection"
-                  />
+                  <Label htmlFor="password">
+                    {userPlan === 'pro' ? 'Password (Optional)' : 'Password Protection'}
+                  </Label>
+                  <div className={cn(
+                    "relative",
+                    userPlan !== 'pro' && "after:absolute after:inset-0 after:bg-gradient-to-r after:from-purple-500/20 after:via-pink-500/20 after:to-blue-500/20 after:rounded-md after:blur-sm"
+                  )}>
+                    <Input
+                      id="password"
+                      type="password"
+                      value={userPlan === 'pro' ? password : ''}
+                      onChange={userPlan === 'pro' ? (e) => setPassword(e.target.value) : undefined}
+                      disabled={userPlan !== 'pro'}
+                      placeholder={userPlan === 'pro' ? 'Add password protection' : 'Pro feature - Upgrade to use passwords'}
+                      className={cn(
+                        "relative",
+                        userPlan !== 'pro' && "bg-gray-100 dark:bg-gray-800 border-2 border-transparent bg-clip-padding"
+                      )}
+                    />
+                  </div>
                 </div>
                 <div>
                   <Label htmlFor="expiry">Expiry Time</Label>
@@ -374,7 +402,7 @@ export function CreateSecret() {
                         {isDragActive ? 'Drop the file here' : 'Drag & drop a file here, or click to select'}
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        Maximum file size: 10MB
+                        Maximum file size: {userPlan === 'pro' ? '50MB' : '5MB'}
                       </p>
                     </div>
                   )}
@@ -383,14 +411,26 @@ export function CreateSecret() {
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <Label htmlFor="file-password">Password (Optional)</Label>
-                  <Input
-                    id="file-password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Add password protection"
-                  />
+                  <Label htmlFor="file-password">
+                    {userPlan === 'pro' ? 'Password (Optional)' : 'Password Protection'}
+                  </Label>
+                  <div className={cn(
+                    "relative",
+                    userPlan !== 'pro' && "after:absolute after:inset-0 after:bg-gradient-to-r after:from-purple-500/20 after:via-pink-500/20 after:to-blue-500/20 after:rounded-md after:blur-sm"
+                  )}>
+                    <Input
+                      id="file-password"
+                      type="password"
+                      value={userPlan === 'pro' ? password : ''}
+                      onChange={userPlan === 'pro' ? (e) => setPassword(e.target.value) : undefined}
+                      disabled={userPlan !== 'pro'}
+                      placeholder={userPlan === 'pro' ? 'Add password protection' : 'Pro feature - Upgrade to use passwords'}
+                      className={cn(
+                        "relative",
+                        userPlan !== 'pro' && "bg-gray-100 dark:bg-gray-800 border-2 border-transparent bg-clip-padding"
+                      )}
+                    />
+                  </div>
                 </div>
                 <div>
                   <Label htmlFor="file-expiry">Expiry Time</Label>

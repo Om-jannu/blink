@@ -6,6 +6,11 @@ interface UIState {
   // Authentication state
   isAuthenticated: boolean;
   user: any | null;
+  blinkUserId: string | null; // UUID from blink_users
+  
+  // Subscription state
+  userPlan: 'free' | 'pro' | null;
+  subscriptionStatus: 'active' | 'canceled' | 'past_due' | 'trialing' | null;
   
   // UI state
   activeTab: 'text' | 'file';
@@ -17,6 +22,9 @@ interface UIState {
   
   // Actions
   setAuthenticated: (isAuthenticated: boolean, user?: any) => void;
+  setBlinkUserId: (id: string | null) => void;
+  setUserPlan: (plan: 'free' | 'pro' | null) => void;
+  setSubscriptionStatus: (status: 'active' | 'canceled' | 'past_due' | 'trialing' | null) => void;
   setActiveTab: (tab: 'text' | 'file') => void;
   setShowUserSecrets: (show: boolean) => void;
   setUserSecrets: (secrets: Secret[]) => void;
@@ -32,6 +40,9 @@ export const useStore = create<UIState>()(
       // Initial state
       isAuthenticated: false,
       user: null,
+      blinkUserId: null,
+      userPlan: null,
+      subscriptionStatus: null,
       activeTab: 'text',
       showUserSecrets: false,
       userSecrets: [],
@@ -40,6 +51,12 @@ export const useStore = create<UIState>()(
       // Actions
       setAuthenticated: (isAuthenticated, user) => 
         set({ isAuthenticated, user }),
+
+      setBlinkUserId: (blinkUserId) => set({ blinkUserId }),
+      
+      setUserPlan: (userPlan) => set({ userPlan }),
+      
+      setSubscriptionStatus: (subscriptionStatus) => set({ subscriptionStatus }),
       
       setActiveTab: (activeTab) => 
         set({ activeTab }),
@@ -74,7 +91,10 @@ export const useStore = create<UIState>()(
       name: 'blink-store',
       partialize: (state) => ({ 
         activeTab: state.activeTab,
-        showUserSecrets: state.showUserSecrets 
+        showUserSecrets: state.showUserSecrets,
+        blinkUserId: state.blinkUserId,
+        userPlan: state.userPlan,
+        subscriptionStatus: state.subscriptionStatus
       }),
     }
   )
