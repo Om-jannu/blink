@@ -1,190 +1,184 @@
-# 🔒 Blink - Secure Share
+# 🔐 Blink - Secure Share
 
-**Share secrets that vanish — truly private, one-time, and encrypted.**
+**The ultimate privacy-first file and text sharing platform with burn-after-read functionality.**
 
-Blink is a burn-after-read file and text sharing platform designed for individuals, professionals, and businesses who want to send confidential information securely. Once viewed, the message or file self-destructs — ensuring no trace remains on the server.
+Blink is a secure, zero-knowledge file and text sharing service that prioritizes privacy and security. Share sensitive information with confidence knowing that your data is encrypted client-side and automatically deleted after viewing.
 
-## ✨ Features
+## ✨ Key Features
 
-- **End-to-End Encryption**: AES-256 encryption done client-side
-- **One-Time View**: Each secret can only be viewed once
-- **Auto-Destruct**: Files and messages automatically delete after viewing
-- **No Account Required**: Anonymous usage for basic features
-- **File Support**: Upload and share encrypted files (1MB limit for free tier)
-- **Password Protection**: Optional password for additional security
-- **Expiry Options**: Set custom expiration times
+### 🔒 **Zero-Knowledge Encryption**
+- **Client-side encryption** using AES-256-GCM
+- **Password-protected secrets** with PBKDF2 key derivation
+- **Server never sees your plaintext data**
+- **Two-tier security model** for maximum protection
 
-## 🚀 Quick Start
+### ⚡ **One-Time Sharing**
+- **Burn-after-read** functionality
+- **Automatic deletion** after first view
+- **No permanent storage** of sensitive data
+- **Perfect for sensitive documents**
 
-### Prerequisites
+### 🎯 **Multiple Sharing Options**
+- **Text secrets** - Share sensitive messages
+- **File secrets** - Upload documents, images, PDFs
+- **Password protection** - Add extra security layer
+- **Custom expiry times** - Control when secrets expire
 
-- Node.js 18+ 
-- npm or yarn
-- Supabase account (for backend)
+### 👤 **User Accounts & Plans**
+- **Anonymous sharing** - No signup required
+- **Free plan** - 10 text + 5 file secrets (5MB limit)
+- **Pro plan** - Unlimited secrets (50MB limit)
+- **Dashboard management** - Track and manage your secrets
 
-### Installation
+### 🛡️ **Privacy-First Design**
+- **No data collection** beyond what's necessary
+- **Client-side encryption** before upload
+- **Automatic cleanup** of expired secrets
+- **GDPR compliant** architecture
 
-1. **Clone and install dependencies:**
-```bash
-npm install
-```
+## 🚀 Use Cases
 
-2. **Set up Supabase:**
-   - Create a new Supabase project
-   - Create the following table in your Supabase SQL editor:
+### **Business & Enterprise**
+- Share confidential documents securely
+- Send sensitive financial information
+- Transfer API keys and credentials
+- Communicate with clients privately
 
-```sql
-CREATE TABLE secrets (
-  id TEXT PRIMARY KEY,
-  type TEXT NOT NULL CHECK (type IN ('text', 'file')),
-  encrypted_content TEXT NOT NULL,
-  file_name TEXT,
-  file_size INTEGER,
-  expiry_time TIMESTAMP WITH TIME ZONE NOT NULL,
-  view_count INTEGER DEFAULT 0,
-  password_hash TEXT,
-  encryption_salt TEXT NOT NULL,
-  owner_id TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
+### **Personal Privacy**
+- Share personal documents safely
+- Send sensitive photos privately
+- Transfer passwords securely
+- Share private notes and messages
 
--- Create index for expiry cleanup
-CREATE INDEX idx_secrets_expiry ON secrets(expiry_time);
+### **Developer Tools**
+- Share API keys and tokens
+- Transfer configuration files
+- Send debug logs securely
+- Share code snippets privately
 
--- Enable RLS (Row Level Security)
-ALTER TABLE secrets ENABLE ROW LEVEL SECURITY;
+## 🎨 **Modern User Experience**
 
--- Allow anonymous access for MVP
-CREATE POLICY "Allow anonymous access" ON secrets FOR ALL USING (true);
-```
+### **Beautiful Interface**
+- **Dark/Light mode** support
+- **Responsive design** for all devices
+- **Intuitive drag-and-drop** file uploads
+- **Real-time feedback** and notifications
 
-3. **Configure environment variables:**
-   Create a `.env.local` file in the root directory:
-```env
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key-here
-```
+### **Smart Features**
+- **File type detection** and validation
+- **Size limit enforcement** by plan
+- **Expiry time management**
+- **One-click sharing** with copy links
 
-4. **Start the development server:**
-```bash
-npm run dev
-```
+### **Dashboard Management**
+- **Secret overview** with status tracking
+- **Bulk operations** for multiple secrets
+- **Usage analytics** and insights
+- **Plan management** and upgrades
 
-5. **Open your browser:**
-   Navigate to `http://localhost:5173`
+## 🔧 **Technical Architecture**
 
-## 🏗️ Architecture
-
-### Frontend
-- **React 19** with TypeScript
-- **Vite** for fast development and building
+### **Frontend**
+- **React 18** with TypeScript
+- **Vite** for fast development
 - **TailwindCSS** for styling
-- **shadcn/ui** for UI components
-- **CryptoJS** for client-side encryption
+- **shadcn/ui** component library
 
-### Backend
-- **Supabase** for database and authentication
+### **Backend**
+- **Supabase** for database and auth
 - **PostgreSQL** for data storage
+- **Edge Functions** for serverless logic
 - **Row Level Security** for data protection
 
-### Security Features
-- **Zero-knowledge encryption**: Data is encrypted client-side
-- **One-time view**: Secrets are deleted after viewing
-- **Auto-expiry**: TTL-based cleanup
-- **Password protection**: Optional additional security layer
+### **Security**
+- **AES-256-GCM** encryption
+- **PBKDF2** key derivation
+- **Client-side encryption** only
+- **Zero-knowledge architecture**
 
-## 📁 Project Structure
+## 📊 **Plan Comparison**
 
-```
-src/
-├── components/          # React components
-│   ├── LandingPage.tsx  # Main landing page
-│   ├── TextShare.tsx    # Text sharing interface
-│   ├── FileShare.tsx    # File sharing interface
-│   └── SecretViewer.tsx  # Secret viewing interface
-├── lib/                 # Utility libraries
-│   ├── encryption.ts    # Encryption/decryption functions
-│   ├── supabase.ts      # Supabase client and API
-│   └── utils.ts         # General utilities
-└── App.tsx             # Main application component
-```
+| Feature | Anonymous | Free | Pro |
+|---------|-----------|------|-----|
+| Text Secrets | ✅ | 10 | Unlimited |
+| File Secrets | ✅ | 5 | Unlimited |
+| File Size Limit | 5MB | 5MB | 50MB |
+| Password Protection | ❌ | ❌ | ✅ |
+| Custom Expiry | ✅ | ✅ | ✅ |
+| Dashboard | ❌ | ✅ | ✅ |
+| Secret Management | ❌ | ✅ | ✅ |
+| Analytics | ❌ | ✅ | ✅ |
 
-## 🔧 Development
+## 🌟 **Why Choose Blink?**
 
-### Available Scripts
+### **Privacy by Design**
+- Your data is encrypted before leaving your device
+- Server never has access to your plaintext content
+- Automatic deletion ensures no data persistence
+- GDPR compliant with minimal data collection
 
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm run preview` - Preview production build
-- `npm run lint` - Run ESLint
+### **Security First**
+- Military-grade encryption standards
+- Password-protected secrets for extra security
+- Client-side key generation and management
+- Regular security audits and updates
 
-### Adding New Features
+### **User Experience**
+- Simple, intuitive interface
+- Fast and reliable performance
+- Cross-platform compatibility
+- No technical knowledge required
 
-1. **Text Sharing**: Implemented in `TextShare.tsx`
-2. **File Sharing**: Implemented in `FileShare.tsx`
-3. **Secret Viewing**: Implemented in `SecretViewer.tsx`
+### **Enterprise Ready**
+- Scalable architecture
+- API access for integrations
+- Custom deployment options
+- White-label solutions available
 
-## 🚀 Deployment
+## 🔮 **Roadmap**
 
-### Vercel (Recommended)
-
-1. Connect your GitHub repository to Vercel
-2. Set environment variables in Vercel dashboard
-3. Deploy automatically on push to main branch
-
-### Netlify
-
-1. Build the project: `npm run build`
-2. Deploy the `dist` folder to Netlify
-3. Set environment variables in Netlify dashboard
-
-## 🔒 Security Considerations
-
-- All encryption happens client-side
-- Server never sees plaintext data
-- Secrets are automatically deleted after viewing
-- TTL-based cleanup prevents data accumulation
-- Password protection adds extra security layer
-
-## 📈 Roadmap
-
-### Phase 1 (MVP) ✅
+### **Phase 1 - Core Features** ✅
 - [x] Text and file sharing
-- [x] One-time view validation
 - [x] Client-side encryption
-- [x] Expiry options
-- [x] Anonymous usage
+- [x] One-time viewing
+- [x] User authentication
+- [x] Basic dashboard
 
-### Phase 2 (Growth)
-- [ ] User accounts and authentication
-- [ ] Password protection
-- [ ] Email notifications
-- [ ] Analytics dashboard
-- [ ] Premium features
+### **Phase 2 - Enhanced Security** ✅
+- [x] Password protection
+- [x] Two-tier encryption model
+- [x] Advanced expiry options
+- [x] Secret management
 
-### Phase 3 (Enterprise)
-- [ ] REST API
-- [ ] CLI tool
-- [ ] Team workspaces
+### **Phase 3 - Enterprise Features** 🚧
+- [ ] API access
 - [ ] Custom domains
-- [ ] Audit logs
+- [ ] Team collaboration
+- [ ] Advanced analytics
 
-## 🤝 Contributing
+### **Phase 4 - Platform Expansion** 📋
+- [ ] Mobile applications
+- [ ] Browser extensions
+- [ ] Third-party integrations
+- [ ] Enterprise solutions
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+## 🤝 **Contributing**
 
-## 📄 License
+We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
 
-MIT License - see LICENSE file for details
+## 📄 **License**
 
-## 🆘 Support
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-For support, email support@blink.app or create an issue on GitHub.
+## 🆘 **Support**
+
+- **Documentation**: [docs.blink.sh](https://docs.blink.sh)
+- **Community**: [Discord](https://discord.gg/blink)
+- **Issues**: [GitHub Issues](https://github.com/blink/issues)
+- **Email**: support@blink.sh
 
 ---
 
-**Built with ❤️ for privacy and security**
+**Made with ❤️ for privacy-conscious users worldwide.**
+
+*Blink - Share securely, delete automatically.*
