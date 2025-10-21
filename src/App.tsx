@@ -31,12 +31,7 @@ function LandingPage() {
   const { isSignedIn } = useAuth();
   const { activeTab, setActiveTab, blinkUserId } = useStore();
 
-  // Redirect authenticated users to dashboard only on home route
-  useEffect(() => {
-    if (isSignedIn && window.location.pathname === '/') {
-      window.location.href = '/dashboard';
-    }
-  }, [isSignedIn]);
+  // Allow logged-in users to access landing page for anonymous secret creation
 
   // Shared state for both text and file sharing
   const [text, setText] = useState('');
@@ -487,26 +482,7 @@ function LandingPage() {
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
         <div className="max-w-7xl mx-auto">
-          {/* Authenticated User Message - Only show on home page, not when viewing secrets */}
-          {isSignedIn && !viewingSecret && window.location.pathname === '/' && (
-            <Card className="max-w-2xl mx-auto mb-8">
-              <CardHeader className="text-center">
-                <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Shield className="w-8 h-8 text-primary" />
-                </div>
-                <CardTitle className="text-2xl">Welcome Back!</CardTitle>
-                <CardDescription>
-                  You're signed in. Redirecting you to your dashboard...
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="text-center">
-                <Button onClick={() => window.location.href = '/dashboard'} className="w-full">
-                  <User className="w-4 h-4 mr-2" />
-                  Go to Dashboard
-                </Button>
-              </CardContent>
-            </Card>
-          )}
+          {/* Removed welcome back message - logged-in users can use landing page normally */}
 
           {/* Secret Viewer - Available for all users */}
           {viewingSecret && (
@@ -635,7 +611,7 @@ function LandingPage() {
           )}
 
           {/* Main Landing Page Content */}
-          {!isSignedIn && !viewingSecret && (
+          {!viewingSecret && (
             <div className="grid lg:grid-cols-2 gap-12 items-center min-h-[600px]">
               {/* Left Column - Content */}
               <div className="space-y-8">
