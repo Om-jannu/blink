@@ -102,7 +102,6 @@ export function getSafeFileName(fileName: string, existingNames: string[] = []):
   
   // Check if name already exists and add a number suffix if needed
   let counter = 1;
-  let baseName = safeName;
   const extension = safeName.substring(safeName.lastIndexOf('.'));
   const nameWithoutExtension = safeName.substring(0, safeName.lastIndexOf('.'));
   

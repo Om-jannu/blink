@@ -5,13 +5,11 @@ import { Badge } from '@/components/ui/badge';
 import { 
   TrendingUp, 
   Eye, 
-  Clock, 
   FileText, 
   Upload,
   BarChart3,
   Activity,
-  Calendar,
-  Users
+  Calendar
 } from 'lucide-react';
 import { getUserSecrets } from '@/lib/supabase';
 import { useStore } from '@/lib/store';
@@ -308,7 +306,7 @@ export function AnalyticsPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {analytics.recentActivity.map((secret, index) => (
+              {analytics.recentActivity.map((secret) => (
                 <div key={secret.id} className="flex items-center justify-between p-3 border rounded-lg">
                   <div className="flex items-center gap-3">
                     {secret.type === 'text' ? (

@@ -11,9 +11,6 @@ import {
   FileText, 
   Upload, 
   Search,
-  Filter,
-  SortAsc,
-  SortDesc,
   Copy,
   ExternalLink
 } from 'lucide-react';

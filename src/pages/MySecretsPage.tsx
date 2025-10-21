@@ -38,7 +38,7 @@ import {
 } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import { cn } from '@/lib/utils';
-import { encryptText, encryptFile } from '@/lib/encryption';
+import { encryptText, encryptFile, decryptText, decryptFile, decryptTextWithPassword, decryptFileWithPassword } from '@/lib/encryption';
 import { createSecret, getUserSecrets, deleteSecret, cleanupExpiredSecrets, expireSecretNow, renewSecretExpiry, getUserSubscription } from '@/lib/supabase';
 import { validateFileName } from '@/lib/validation';
 import { useDropzone } from 'react-dropzone';
@@ -465,7 +465,7 @@ export function MySecretsPage() {
     try {
       if (secret.type === 'text') {
         // For text secrets, decrypt and show preview
-        const { decryptText, decryptTextWithPassword } = await import('@/lib/encryption');
+        // Using static imports instead of dynamic
         let result;
         
         if (password) {
@@ -489,7 +489,7 @@ export function MySecretsPage() {
         }
       } else if (secret.type === 'file') {
         // For file secrets, decrypt and create preview
-        const { decryptFile, decryptFileWithPassword } = await import('@/lib/encryption');
+        // Using static imports instead of dynamic
         let decryptedFile;
         
         if (password) {
