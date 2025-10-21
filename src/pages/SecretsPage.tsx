@@ -19,7 +19,7 @@ import { useStore } from '@/lib/store';
 
 export function SecretsPage() {
   const { userId } = useAuth();
-  const { userSecrets, setUserSecrets, setSecretsLoading } = useStore();
+  const { userSecrets, setUserSecrets, setSecretsLoading, blinkUserId } = useStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'text' | 'file'>('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'expired'>('all');
@@ -33,11 +33,11 @@ export function SecretsPage() {
   }, [userId]);
 
   const loadUserSecrets = async () => {
-    if (!userId) return;
+    if (!userId || !blinkUserId) return;
     
     setSecretsLoading(true);
     try {
-      const { secrets, error } = await getUserSecrets(userId);
+      const { secrets, error } = await getUserSecrets(blinkUserId);
       if (error) {
         console.error('Failed to load user secrets:', error);
         return;

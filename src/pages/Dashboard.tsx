@@ -44,13 +44,13 @@ export function Dashboard() {
   
   useEffect(() => {
     const fetchPlan = async () => {
-      if (!userId) return;
-      const { subscription } = await getUserSubscription(userId);
+      if (!blinkUserId) return;
+      const { subscription } = await getUserSubscription(blinkUserId);
       setUserPlan(subscription?.plan || 'free');
       setSubscriptionStatus(subscription?.status || null);
     };
     fetchPlan();
-  }, [userId, setUserPlan, setSubscriptionStatus]);
+  }, [blinkUserId, setUserPlan, setSubscriptionStatus]);
 
   const handleDevUpgrade = async () => {
     if (!blinkUserId) return;
@@ -79,11 +79,11 @@ export function Dashboard() {
   }, [userSecrets]);
 
   const loadUserSecrets = async () => {
-    if (!userId) return;
+    if (!userId || !blinkUserId) return;
 
     setSecretsLoading(true);
     try {
-      const { secrets, error } = await getUserSecrets(userId);
+      const { secrets, error } = await getUserSecrets(blinkUserId);
       if (error) {
         console.error('Failed to load user secrets:', error);
         return;

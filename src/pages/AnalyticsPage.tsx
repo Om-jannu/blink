@@ -16,7 +16,7 @@ import { useStore } from '@/lib/store';
 
 export function AnalyticsPage() {
   const { userId } = useAuth();
-  const { userSecrets, setUserSecrets, setSecretsLoading } = useStore();
+  const { userSecrets, setUserSecrets, setSecretsLoading, blinkUserId } = useStore();
   const [analytics, setAnalytics] = useState({
     totalSecrets: 0,
     totalViews: 0,
@@ -42,11 +42,11 @@ export function AnalyticsPage() {
   }, [userSecrets]);
 
   const loadUserSecrets = async () => {
-    if (!userId) return;
+    if (!userId || !blinkUserId) return;
     
     setSecretsLoading(true);
     try {
-      const { secrets, error } = await getUserSecrets(userId);
+      const { secrets, error } = await getUserSecrets(blinkUserId);
       if (error) {
         console.error('Failed to load user secrets:', error);
         return;

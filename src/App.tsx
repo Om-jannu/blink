@@ -29,7 +29,7 @@ import './App.css';
 // Landing Page Component
 function LandingPage() {
   const { isSignedIn } = useAuth();
-  const { activeTab, setActiveTab } = useStore();
+  const { activeTab, setActiveTab, blinkUserId } = useStore();
 
   // Redirect authenticated users to dashboard only on home route
   useEffect(() => {
@@ -403,7 +403,7 @@ function LandingPage() {
           expiry_time: new Date(Date.now() + expiryHours * 60 * 60 * 1000).toISOString(),
           password_hash: undefined,
           encryption_key_or_salt: key,
-          owner_user_id: isSignedIn ? undefined : undefined // Anonymous users have no owner
+          owner_user_id: isSignedIn ? blinkUserId : undefined // Signed-in users have blinkUserId, anonymous users have no owner
         };
       } else {
         const result = await encryptFile(file!);
@@ -417,7 +417,7 @@ function LandingPage() {
           expiry_time: new Date(Date.now() + expiryHours * 60 * 60 * 1000).toISOString(),
           password_hash: undefined,
           encryption_key_or_salt: key,
-          owner_user_id: isSignedIn ? undefined : undefined // Anonymous users have no owner
+          owner_user_id: isSignedIn ? blinkUserId : undefined // Signed-in users have blinkUserId, anonymous users have no owner
         };
       }
 

@@ -9,7 +9,7 @@ import { getUserSecrets, deleteSecret } from '@/lib/supabase';
 
 export function UserSecrets() {
   const { isSignedIn, userId } = useAuth();
-  const { userSecrets, secretsLoading, setUserSecrets, setSecretsLoading, removeUserSecret } = useStore();
+  const { userSecrets, secretsLoading, setUserSecrets, setSecretsLoading, removeUserSecret, blinkUserId } = useStore();
 
   useEffect(() => {
     if (isSignedIn && userId) {
@@ -18,11 +18,11 @@ export function UserSecrets() {
   }, [isSignedIn, userId]);
 
   const loadUserSecrets = async () => {
-    if (!userId) return;
+    if (!userId || !blinkUserId) return;
     
     setSecretsLoading(true);
     try {
-      const { secrets, error } = await getUserSecrets(userId);
+      const { secrets, error } = await getUserSecrets(blinkUserId);
       if (error) {
         console.error('Failed to load user secrets:', error);
         return;

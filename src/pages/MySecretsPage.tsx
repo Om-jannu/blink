@@ -11,15 +11,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import {
-  CommandDialog,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-  CommandSeparator,
-} from '@/components/ui/command';
+// Removed command dialog imports
 import {
   Shield,
   FileText,
@@ -64,7 +56,7 @@ export function MySecretsPage() {
   const [previewPassword, setPreviewPassword] = useState('');
   const [previewPasswordRequired, setPreviewPasswordRequired] = useState(false);
   const [previewSecret, setPreviewSecret] = useState<any>(null);
-  const [isCommandOpen, setIsCommandOpen] = useState(false);
+  // Removed command dialog state
   const [page, setPage] = useState(1);
   const pageSize = 10;
 
@@ -92,7 +84,7 @@ export function MySecretsPage() {
     { value: '6', label: '6 hours' },
     { value: '24', label: '1 day' },
     { value: '168', label: '1 week' },
-    { value: 'custom', label: 'Custom' },
+    ...(plan === 'pro' ? [{ value: 'custom', label: 'Custom' }] : [{ value: 'custom', label: 'Custom (Pro)', disabled: true }]),
   ];
 
   useEffect(() => {
@@ -103,23 +95,14 @@ export function MySecretsPage() {
 
   useEffect(() => {
     const fetchPlan = async () => {
-      if (!userId) return;
-      const { subscription } = await getUserSubscription(userId);
+      if (!blinkUserId) return;
+      const { subscription } = await getUserSubscription(blinkUserId);
       setPlan(subscription?.plan || 'free');
     };
     fetchPlan();
-  }, [userId]);
+  }, [blinkUserId]);
 
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        setIsCommandOpen((o) => !o);
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  // Removed command dialog keyboard shortcut
 
   const loadUserSecrets = async () => {
     if (!blinkUserId) return;
@@ -669,7 +652,12 @@ export function MySecretsPage() {
                           </SelectTrigger>
                           <SelectContent>
                             {expiryOptions.map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
+                              <SelectItem 
+                                key={option.value} 
+                                value={option.value}
+                                disabled={option.disabled}
+                                className={option.disabled ? 'opacity-50 cursor-not-allowed' : ''}
+                              >
                                 {option.label}
                               </SelectItem>
                             ))}
@@ -748,7 +736,12 @@ export function MySecretsPage() {
                           </SelectTrigger>
                           <SelectContent>
                             {expiryOptions.map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
+                              <SelectItem 
+                                key={option.value} 
+                                value={option.value}
+                                disabled={option.disabled}
+                                className={option.disabled ? 'opacity-50 cursor-not-allowed' : ''}
+                              >
                                 {option.label}
                               </SelectItem>
                             ))}
@@ -781,24 +774,7 @@ export function MySecretsPage() {
           </DialogContent>
         </Dialog>
       </div>
-      {/* Command Palette */}
-      <CommandDialog open={isCommandOpen} onOpenChange={setIsCommandOpen}>
-        <CommandInput placeholder="Type a command or search..." />
-        <CommandList>
-          <CommandEmpty>No results found.</CommandEmpty>
-          <CommandGroup heading="Actions">
-            <CommandItem onSelect={() => { setIsCommandOpen(false); setIsCreateOpen(true); }}>
-              <Shield className="w-4 h-4 mr-2" /> New Secret
-            </CommandItem>
-          </CommandGroup>
-          <CommandSeparator />
-          <CommandGroup heading="Search">
-            <CommandItem onSelect={() => { setIsCommandOpen(false); const el = document.querySelector<HTMLInputElement>('#my-secrets-search'); el?.focus(); }}>
-              <Search className="w-4 h-4 mr-2" /> Focus search
-            </CommandItem>
-          </CommandGroup>
-        </CommandList>
-      </CommandDialog>
+      {/* Removed command dialog */}
 
       {/* Manage Secrets Section */}
       <div className="space-y-6">
