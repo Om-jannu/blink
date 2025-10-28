@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Shield, Download, Eye, AlertCircle, Lock, FileText, File, Copy, Check } from 'lucide-react';
+import { Shield, Download, AlertCircle, Lock, FileText, File, Copy, Check, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -25,7 +25,7 @@ export default function SecretViewer({ secretId, encryptionKey }: SecretViewerPr
   const [error, setError] = useState('');
   const [password, setPassword] = useState('');
   const [passwordRequired, setPasswordRequired] = useState(false);
-  const [hasViewed, setHasViewed] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showContent, setShowContent] = useState(false);
   const [isAnonymous, setIsAnonymous] = useState(false);
@@ -37,7 +37,7 @@ export default function SecretViewer({ secretId, encryptionKey }: SecretViewerPr
   // Handle page reload - delete secret if it's anonymous and was already viewed
   useEffect(() => {
     const handleBeforeUnload = () => {
-      if (isAnonymous && hasViewed) {
+      if (isAnonymous) {
         // Secret is already deleted, but we can add cleanup here if needed
         console.log('Page reloading - anonymous secret already deleted');
       }
@@ -45,7 +45,7 @@ export default function SecretViewer({ secretId, encryptionKey }: SecretViewerPr
 
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [isAnonymous, hasViewed]);
+  }, [isAnonymous]);
 
   const loadSecret = async () => {
     try {
@@ -147,7 +147,6 @@ export default function SecretViewer({ secretId, encryptionKey }: SecretViewerPr
             console.log('Secret marked as viewed');
             await deleteSecret(secretId);
             console.log('Secret deleted from database');
-            // Don't set hasViewed to true - keep content visible
           } catch (error) {
             console.error('Failed to delete anonymous secret:', error);
           }
@@ -210,18 +209,6 @@ export default function SecretViewer({ secretId, encryptionKey }: SecretViewerPr
       console.error('Failed to download file:', error);
     }
   };
-
-  const handleViewSecret = async () => {
-    try {
-      // Mark as viewed and delete
-      await markSecretAsViewed(secretId);
-      await deleteSecret(secretId);
-      setHasViewed(true);
-    } catch (error) {
-      console.error('Failed to mark secret as viewed:', error);
-    }
-  };
-
 
   if (isLoading) {
     return (
@@ -288,14 +275,30 @@ export default function SecretViewer({ secretId, encryptionKey }: SecretViewerPr
             <form onSubmit={handlePasswordSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="password">Enter password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter the password"
-                  required
-                />
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter the password"
+                    required
+                    className="pr-10"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4 text-muted-foreground" />
+                    ) : (
+                      <Eye className="h-4 w-4 text-muted-foreground" />
+                    )}
+                  </Button>
+                </div>
               </div>
 
               {error && (
@@ -328,44 +331,8 @@ export default function SecretViewer({ secretId, encryptionKey }: SecretViewerPr
     );
   }
 
-  if (hasViewed) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <Card className="max-w-2xl w-full">
-          <CardHeader className="text-center">
-            <div className="w-16 h-16 bg-green-100 dark:bg-green-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Eye className="w-8 h-8 text-green-600" />
-            </div>
-            <CardTitle className="text-3xl">Secret Viewed</CardTitle>
-            <CardDescription className="text-lg">
-              This secret has been viewed and automatically deleted for your security.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Alert className="border-green-200 bg-green-50 dark:bg-green-900/20">
-              <AlertCircle className="h-4 w-4 text-green-600" />
-              <AlertDescription className="text-green-800 dark:text-green-200">
-                ✓ Content has been permanently deleted from our servers
-              </AlertDescription>
-            </Alert>
-            <div className="pt-4 border-t">
-              <Button
-                onClick={() => navigate('/')}
-                variant="outline"
-                className="w-full"
-              >
-                <Shield className="w-4 h-4 mr-2" />
-                Create Your Own Secret
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  // Show content if decrypted but not yet viewed (for registered users)
-  if (showContent && !hasViewed && !isAnonymous) {
+  // Show content for registered users (no deletion prompt)
+  if (showContent && !isAnonymous) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <Card className="max-w-4xl w-full">
@@ -377,7 +344,7 @@ export default function SecretViewer({ secretId, encryptionKey }: SecretViewerPr
               {secret?.type === 'file' ? 'Encrypted File' : 'Secret Message'}
             </CardTitle>
             <CardDescription className="text-lg">
-              This content will be deleted after viewing
+              Your secure content is ready to view
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -430,33 +397,8 @@ export default function SecretViewer({ secretId, encryptionKey }: SecretViewerPr
               </Card>
             )}
 
-            <Alert className="border-yellow-200 bg-yellow-50 dark:bg-yellow-900/20">
-              <AlertCircle className="h-4 w-4 text-yellow-600" />
-              <AlertDescription>
-                <div>
-                  <p className="font-medium text-yellow-800 dark:text-yellow-200 mb-1">
-                    Security Notice
-                  </p>
-                  <p className="text-yellow-700 dark:text-yellow-300">
-                    This secret will be permanently deleted after you click "I've Viewed This Secret".
-                  </p>
-                </div>
-              </AlertDescription>
-            </Alert>
-
-            <div className="flex gap-3">
-              <Button
-                onClick={handleViewSecret}
-                className="flex-1 bg-red-600 hover:bg-red-700"
-              >
-                <Eye className="w-4 h-4 mr-2" />
-                I've Viewed This Secret
-              </Button>
-              <Button
-                onClick={() => navigate('/')}
-                variant="outline"
-                className="flex-1"
-              >
+            <div className="pt-4 border-t">
+              <Button onClick={() => navigate('/')} variant="outline" className="w-full">
                 <Shield className="w-4 h-4 mr-2" />
                 Create Your Own Secret
               </Button>

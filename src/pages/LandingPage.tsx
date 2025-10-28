@@ -83,6 +83,14 @@ export function LandingPage() {
     window.open(secretUrl, '_blank', 'noopener,noreferrer');
   };
 
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
   const { getRootProps, getInputProps } = useDropzone({
     onDrop: (acceptedFiles) => {
       const file = acceptedFiles[0];
@@ -363,10 +371,10 @@ export function LandingPage() {
                                 <AlertDescription>{error}</AlertDescription>
                               </Alert>
                             )}
-                            <Button type="submit" className="w-full" disabled={isLoading || !text.trim()}>
+                            <Button type="submit" className="w-full bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 text-white dark:text-gray-900 shadow-md" disabled={isLoading || !text.trim()}>
                               {isLoading ? (
                                 <>
-                                  <div className="animate-spin w-4 h-4 mr-2 border-2 border-current border-t-transparent rounded-full" />
+                                  <div className="animate-spin w-4 h-4 mr-2 border-2 border-white border-t-transparent rounded-full" />
                                   Creating...
                                 </>
                               ) : (
@@ -388,12 +396,39 @@ export function LandingPage() {
                               >
                                 <input {...getInputProps()} />
                                 <Upload className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-                                <p className="text-lg font-medium mb-2">
-                                  {file ? file.name : 'Drop your file here or click to browse'}
-                                </p>
-                                <p className="text-sm text-muted-foreground">
-                                  Maximum file size: 5MB
-                                </p>
+                                {file ? (
+                                  <div className="space-y-2">
+                                    <div className="flex items-center justify-center space-x-3">
+                                      <FileText className="w-8 h-8 text-blue-600" />
+                                      <div className="text-left">
+                                        <p className="text-lg font-medium">{file.name}</p>
+                                        <p className="text-sm text-muted-foreground">{formatFileSize(file.size)}</p>
+                                      </div>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setFile(null);
+                                      }}
+                                      className="text-sm text-red-600 hover:text-red-700 underline"
+                                    >
+                                      Remove file
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div>
+                                    <p className="text-lg font-medium mb-2">
+                                      Drop your file here or click to browse
+                                    </p>
+                                    <p className="text-sm text-muted-foreground">
+                                      Maximum file size: 5MB
+                                    </p>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      Supported: Images, PDFs, documents, archives, and more
+                                    </p>
+                                  </div>
+                                )}
                               </div>
                             </div>
                             <div className="space-y-2">
@@ -432,10 +467,10 @@ export function LandingPage() {
                                 <AlertDescription>{error}</AlertDescription>
                               </Alert>
                             )}
-                            <Button type="submit" className="w-full" disabled={isLoading || !file}>
+                            <Button type="submit" className="w-full bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 text-white dark:text-gray-900 shadow-md" disabled={isLoading || !file}>
                               {isLoading ? (
                                 <>
-                                  <div className="animate-spin w-4 h-4 mr-2 border-2 border-current border-t-transparent rounded-full" />
+                                  <div className="animate-spin w-4 h-4 mr-2 border-2 border-white border-t-transparent rounded-full" />
                                   Creating...
                                 </>
                               ) : (
@@ -661,7 +696,7 @@ export function LandingPage() {
               </div>
 
               {/* Main Content Grid */}
-              <div className="grid lg:grid-cols-3 gap-8 mb-16">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-16">
                 {/* Features */}
                 <div className="lg:col-span-1 space-y-6">
                   <Card className="border-2 border-primary/20">
@@ -729,21 +764,21 @@ export function LandingPage() {
                 <div className="lg:col-span-2 space-y-6">
                   <Card className="border-2 border-blue-200 dark:border-blue-800">
                     <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="flex items-center gap-2">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
                           <Code className="w-5 h-5" />
                           Quick Start Examples
                         </CardTitle>
-                        <Badge variant="outline" className="text-xs">Copy & Paste Ready</Badge>
+                        <Badge variant="outline" className="text-xs w-fit">Copy & Paste Ready</Badge>
                       </div>
-                      <CardDescription>
+                      <CardDescription className="text-sm sm:text-base">
                         Get started in minutes with these copy-paste examples
                       </CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-6">
+                    <CardContent className="space-y-4 sm:space-y-6">
                       {/* JavaScript Example */}
                       <div>
-                        <div className="flex items-center justify-between mb-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
                           <div className="flex items-center gap-2">
                             <div className="w-3 h-3 bg-red-500 rounded-full"></div>
                             <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
@@ -769,7 +804,7 @@ const response = await fetch('https://your-app.vercel.app/api/secrets', {
 
 const secret = await response.json();
 console.log('Secret URL:', secret.view_url);`, 'js-example')}
-                            className="h-8 px-3"
+                            className="h-8 px-3 w-fit"
                           >
                             {copiedCode === 'js-example' ? (
                               <Check className="w-4 h-4" />
@@ -802,7 +837,7 @@ console.log('Secret URL:', secret.view_url);`}
 
                       {/* Python Example */}
                       <div>
-                        <div className="flex items-center justify-between mb-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
                           <div className="flex items-center gap-2">
                             <div className="w-3 h-3 bg-red-500 rounded-full"></div>
                             <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
@@ -831,7 +866,7 @@ response = requests.post(
 
 secret = response.json()
 print(f"Secret URL: {secret['view_url']}")`, 'python-example')}
-                            className="h-8 px-3"
+                            className="h-8 px-3 w-fit"
                           >
                             {copiedCode === 'python-example' ? (
                               <Check className="w-4 h-4" />
@@ -867,7 +902,7 @@ print(f"Secret URL: {secret['view_url']}")`}
 
                       {/* cURL Example */}
                       <div>
-                        <div className="flex items-center justify-between mb-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
                           <div className="flex items-center gap-2">
                             <div className="w-3 h-3 bg-red-500 rounded-full"></div>
                             <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
@@ -881,7 +916,7 @@ print(f"Secret URL: {secret['view_url']}")`}
 curl -X GET https://your-app.vercel.app/api/secrets \\
   -H "x-api-key: your-api-key" \\
   -H "Accept: application/json"`, 'curl-example')}
-                            className="h-8 px-3"
+                            className="h-8 px-3 w-fit"
                           >
                             {copiedCode === 'curl-example' ? (
                               <Check className="w-4 h-4" />
@@ -906,16 +941,16 @@ curl -X GET https://your-app.vercel.app/api/secrets \\
 
               {/* API Endpoints */}
               <div className="mb-16">
-                <h3 className="text-2xl font-bold text-center mb-8">API Endpoints</h3>
-                <div className="grid md:grid-cols-2 gap-4">
+                <h3 className="text-xl sm:text-2xl font-bold text-center mb-6 sm:mb-8">API Endpoints</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Card className="hover:shadow-lg transition-shadow">
-                    <CardContent className="p-6">
-                      <div className="flex items-center gap-3 mb-3">
-                        <Badge className="bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400">POST</Badge>
-                        <code className="text-sm font-mono">/api/secrets</code>
+                    <CardContent className="p-4 sm:p-6">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-3">
+                        <Badge className="bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400 w-fit">POST</Badge>
+                        <code className="text-xs sm:text-sm font-mono break-all">/api/secrets</code>
                       </div>
-                      <h4 className="font-semibold mb-2">Create Secret</h4>
-                      <p className="text-sm text-muted-foreground mb-3">
+                      <h4 className="font-semibold mb-2 text-sm sm:text-base">Create Secret</h4>
+                      <p className="text-xs sm:text-sm text-muted-foreground mb-3">
                         Create a new text or file secret with custom expiry
                       </p>
                       <div className="text-xs text-muted-foreground">
@@ -925,13 +960,13 @@ curl -X GET https://your-app.vercel.app/api/secrets \\
                   </Card>
 
                   <Card className="hover:shadow-lg transition-shadow">
-                    <CardContent className="p-6">
-                      <div className="flex items-center gap-3 mb-3">
-                        <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400">GET</Badge>
-                        <code className="text-sm font-mono">/api/secrets</code>
+                    <CardContent className="p-4 sm:p-6">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-3">
+                        <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400 w-fit">GET</Badge>
+                        <code className="text-xs sm:text-sm font-mono break-all">/api/secrets</code>
                       </div>
-                      <h4 className="font-semibold mb-2">List Secrets</h4>
-                      <p className="text-sm text-muted-foreground mb-3">
+                      <h4 className="font-semibold mb-2 text-sm sm:text-base">List Secrets</h4>
+                      <p className="text-xs sm:text-sm text-muted-foreground mb-3">
                         Retrieve all secrets created with your API key
                       </p>
                       <div className="text-xs text-muted-foreground">
@@ -941,13 +976,13 @@ curl -X GET https://your-app.vercel.app/api/secrets \\
                   </Card>
 
                   <Card className="hover:shadow-lg transition-shadow">
-                    <CardContent className="p-6">
-                      <div className="flex items-center gap-3 mb-3">
-                        <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400">GET</Badge>
-                        <code className="text-sm font-mono">/api/secrets/:id</code>
+                    <CardContent className="p-4 sm:p-6">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-3">
+                        <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400 w-fit">GET</Badge>
+                        <code className="text-xs sm:text-sm font-mono break-all">/api/secrets/:id</code>
                       </div>
-                      <h4 className="font-semibold mb-2">Get Secret</h4>
-                      <p className="text-sm text-muted-foreground mb-3">
+                      <h4 className="font-semibold mb-2 text-sm sm:text-base">Get Secret</h4>
+                      <p className="text-xs sm:text-sm text-muted-foreground mb-3">
                         Retrieve and decrypt a specific secret by ID
                       </p>
                       <div className="text-xs text-muted-foreground">
@@ -957,13 +992,13 @@ curl -X GET https://your-app.vercel.app/api/secrets \\
                   </Card>
 
                   <Card className="hover:shadow-lg transition-shadow">
-                    <CardContent className="p-6">
-                      <div className="flex items-center gap-3 mb-3">
-                        <Badge className="bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400">DELETE</Badge>
-                        <code className="text-sm font-mono">/api/secrets/:id</code>
+                    <CardContent className="p-4 sm:p-6">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-3">
+                        <Badge className="bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400 w-fit">DELETE</Badge>
+                        <code className="text-xs sm:text-sm font-mono break-all">/api/secrets/:id</code>
                       </div>
-                      <h4 className="font-semibold mb-2">Delete Secret</h4>
-                      <p className="text-sm text-muted-foreground mb-3">
+                      <h4 className="font-semibold mb-2 text-sm sm:text-base">Delete Secret</h4>
+                      <p className="text-xs sm:text-sm text-muted-foreground mb-3">
                         Permanently delete a secret and its data
                       </p>
                       <div className="text-xs text-muted-foreground">
@@ -977,33 +1012,33 @@ curl -X GET https://your-app.vercel.app/api/secrets \\
               {/* CTA Section */}
               <div className="text-center">
                 <Card className="max-w-4xl mx-auto border-2 border-primary/20 bg-gradient-to-r from-primary/5 to-blue-500/5">
-                  <CardContent className="pt-12 pb-12">
-                    <div className="space-y-6">
-                      <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
-                        <Code className="w-8 h-8 text-primary" />
+                  <CardContent className="pt-8 pb-8 sm:pt-12 sm:pb-12 px-4 sm:px-6">
+                    <div className="space-y-4 sm:space-y-6">
+                      <div className="w-12 h-12 sm:w-16 sm:h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
+                        <Code className="w-6 h-6 sm:w-8 sm:h-8 text-primary" />
                       </div>
-                      <h3 className="text-3xl font-bold">Ready to Start Building?</h3>
-                      <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+                      <h3 className="text-2xl sm:text-3xl font-bold">Ready to Start Building?</h3>
+                      <p className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto">
                         Join thousands of developers who trust Blink for secure secret sharing. 
                         Get your API key and start integrating in minutes.
                       </p>
-                      <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                      <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
                         {isSignedIn ? (
                           <Button
                             size="lg"
-                            className="text-lg px-8 py-6"
+                            className="text-base sm:text-lg px-6 py-4 sm:px-8 sm:py-6"
                             onClick={() => navigate('/dashboard/api')}
                           >
-                            <Key className="w-5 h-5 mr-2" />
+                            <Key className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
                             Get Your API Key
                           </Button>
                         ) : (
                           <SignInButton mode="modal">
                             <Button
                               size="lg"
-                              className="text-lg px-8 py-6"
+                              className="text-base sm:text-lg px-6 py-4 sm:px-8 sm:py-6"
                             >
-                              <Key className="w-5 h-5 mr-2" />
+                              <Key className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
                               Get Your API Key
                             </Button>
                           </SignInButton>
@@ -1011,14 +1046,14 @@ curl -X GET https://your-app.vercel.app/api/secrets \\
                         <Button
                           variant="outline"
                           size="lg"
-                          className="text-lg px-8 py-6"
+                          className="text-base sm:text-lg px-6 py-4 sm:px-8 sm:py-6"
                           onClick={() => navigate('/api-docs')}
                         >
-                          <Code className="w-5 h-5 mr-2" />
+                          <Code className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
                           View Full Documentation
                         </Button>
                       </div>
-                      <div className="flex items-center justify-center gap-8 text-sm text-muted-foreground pt-4">
+                      <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-8 text-sm text-muted-foreground pt-4">
                         <div className="flex items-center gap-2">
                           <CheckCircle className="w-4 h-4 text-green-500" />
                           <span>Free to start</span>

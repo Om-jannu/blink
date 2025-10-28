@@ -41,11 +41,7 @@ export function SecretViewPage() {
   return (
     <div className="min-h-screen bg-background">
       <PublicNavbar />
-      <main className="container mx-auto px-4 py-8">
-        <div className="max-w-2xl mx-auto">
-          <SecretViewer secretId={id} encryptionKey={encryptionKey} />
-        </div>
-      </main>
+      <SecretViewer secretId={id} encryptionKey={encryptionKey} />
       <PublicFooter />
     </div>
   );

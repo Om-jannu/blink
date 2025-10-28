@@ -149,14 +149,14 @@ export function ApiDocs() {
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               {isSignedIn ? (
-                <Button size="lg" onClick={() => navigate('/dashboard/api')} className="text-lg px-8 py-6">
+                <Button size="lg" onClick={() => navigate('/dashboard/api')} className="text-lg px-8 py-6 bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 text-white dark:text-gray-900 shadow-md">
                   <Key className="w-5 h-5 mr-2" />
                   Manage API Keys
                   <ArrowRight className="w-5 h-5 ml-2" />
                 </Button>
               ) : (
                 <SignInButton mode="modal">
-                  <Button size="lg" className="text-lg px-8 py-6">
+                  <Button size="lg" className="text-lg px-8 py-6 bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 text-white dark:text-gray-900 shadow-md">
                     <Key className="w-5 h-5 mr-2" />
                     Get Your API Key
                     <ArrowRight className="w-5 h-5 ml-2" />
@@ -244,13 +244,13 @@ export function ApiDocs() {
                         Create an API key in your dashboard for authentication
                       </p>
                       {isSignedIn ? (
-                        <Button onClick={() => navigate('/dashboard/api')} className="w-full">
+                        <Button onClick={() => navigate('/dashboard/api')} className="w-full bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 text-white dark:text-gray-900 shadow-md">
                           <Key className="w-4 h-4 mr-2" />
                           Manage API Keys
                         </Button>
                       ) : (
                         <SignInButton mode="modal">
-                          <Button className="w-full">
+                          <Button className="w-full bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 text-white dark:text-gray-900 shadow-md">
                             <Key className="w-4 h-4 mr-2" />
                             Get API Key
                           </Button>
@@ -624,13 +624,13 @@ export function ApiDocs() {
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               {isSignedIn ? (
-                <Button size="lg" onClick={() => navigate('/dashboard/settings')} className="text-lg px-8 py-6">
+                <Button size="lg" onClick={() => navigate('/dashboard/settings')} className="text-lg px-8 py-6 bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 text-white shadow-md">
                   <ExternalLink className="w-5 h-5 mr-2" />
                   Contact Support
                 </Button>
               ) : (
                 <SignInButton mode="modal">
-                  <Button size="lg" className="text-lg px-8 py-6">
+                  <Button size="lg" className="text-lg px-8 py-6 bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 text-white dark:text-gray-900 shadow-md">
                     <ExternalLink className="w-5 h-5 mr-2" />
                     Contact Support
                   </Button>

@@ -16,7 +16,9 @@ import {
   Copy, 
   Check, 
   AlertCircle,
-  ExternalLink
+  ExternalLink,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import { cn } from '@/lib/utils';
@@ -33,6 +35,7 @@ export function CreateSecret() {
   const [text, setText] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [expiry, setExpiry] = useState('15');
   const [customExpiry, setCustomExpiry] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -309,16 +312,31 @@ export function CreateSecret() {
                   )}>
                     <Input
                       id="password"
-                      type="password"
+                      type={showPassword ? "text" : "password"}
                       value={userPlan === 'pro' ? password : ''}
                       onChange={userPlan === 'pro' ? (e) => setPassword(e.target.value) : undefined}
                       disabled={userPlan !== 'pro'}
                       placeholder={userPlan === 'pro' ? 'Add password protection' : 'Pro feature - Upgrade to use passwords'}
                       className={cn(
-                        "relative",
+                        "relative pr-10",
                         userPlan !== 'pro' && "bg-gray-100 dark:bg-gray-800 border-2 border-transparent bg-clip-padding"
                       )}
                     />
+                    {userPlan === 'pro' && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        onClick={() => setShowPassword(!showPassword)}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <Eye className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </Button>
+                    )}
                   </div>
                 </div>
                 <div>
@@ -390,11 +408,14 @@ export function CreateSecret() {
                   <input {...getInputProps()} />
                   <Upload className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
                   {file ? (
-                    <div>
-                      <p className="font-medium">{file.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {formatFileSize(file.size)}
-                      </p>
+                    <div className="flex items-center justify-center space-x-3">
+                      <FileText className="w-8 h-8 text-blue-600" />
+                      <div className="text-left">
+                        <p className="font-medium">{file.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {formatFileSize(file.size)}
+                        </p>
+                      </div>
                     </div>
                   ) : (
                     <div>
@@ -420,16 +441,31 @@ export function CreateSecret() {
                   )}>
                     <Input
                       id="file-password"
-                      type="password"
+                      type={showPassword ? "text" : "password"}
                       value={userPlan === 'pro' ? password : ''}
                       onChange={userPlan === 'pro' ? (e) => setPassword(e.target.value) : undefined}
                       disabled={userPlan !== 'pro'}
                       placeholder={userPlan === 'pro' ? 'Add password protection' : 'Pro feature - Upgrade to use passwords'}
                       className={cn(
-                        "relative",
+                        "relative pr-10",
                         userPlan !== 'pro' && "bg-gray-100 dark:bg-gray-800 border-2 border-transparent bg-clip-padding"
                       )}
                     />
+                    {userPlan === 'pro' && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        onClick={() => setShowPassword(!showPassword)}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <Eye className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </Button>
+                    )}
                   </div>
                 </div>
                 <div>

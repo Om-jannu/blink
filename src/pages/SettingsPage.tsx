@@ -216,7 +216,7 @@ export function SettingsPage() {
               <Button 
                 onClick={handleUpgrade}
                 disabled={isUpgrading}
-                className="bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0 hover:from-purple-600 hover:to-pink-600"
+                className="bg-gradient-to-r from-primary to-blue-600 text-white dark:text-gray-900 border-0 hover:from-primary/90 hover:to-blue-600/90"
               >
                 {isUpgrading ? 'Upgrading...' : 'Upgrade to Pro (Dev)'}
               </Button>
