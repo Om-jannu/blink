@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { 
   Eye, 
   Trash2, 
@@ -25,6 +26,8 @@ export function SecretsPage() {
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'expired'>('all');
   const [sortBy, setSortBy] = useState<'date' | 'views' | 'name'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [secretToDelete, setSecretToDelete] = useState<string | null>(null);
 
   useEffect(() => {
     if (userId) {
@@ -50,16 +53,26 @@ export function SecretsPage() {
     }
   };
 
-  const handleDeleteSecret = async (secretId: string) => {
+  const handleDeleteSecret = (secretId: string) => {
+    setSecretToDelete(secretId);
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDeleteSecret = async () => {
+    if (!secretToDelete) return;
+    
     try {
-      const { success, error } = await deleteSecret(secretId);
+      const { success, error } = await deleteSecret(secretToDelete);
       if (success) {
-        setUserSecrets(userSecrets.filter(s => s.id !== secretId));
+        setUserSecrets(userSecrets.filter(s => s.id !== secretToDelete));
       } else {
         console.error('Failed to delete secret:', error);
       }
     } catch (error) {
       console.error('Failed to delete secret:', error);
+    } finally {
+      setDeleteConfirmOpen(false);
+      setSecretToDelete(null);
     }
   };
 
@@ -291,6 +304,26 @@ export function SecretsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Secret</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this secret? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDeleteSecret}>
+              Delete
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

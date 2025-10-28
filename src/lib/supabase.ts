@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { trackEvent } from './analytics';
 
 // For MVP, we'll use a local setup or you can replace with your Supabase project URL
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -109,6 +110,8 @@ export async function createSecret(data: CreateSecretData): Promise<{ id: string
       }
     }
 
+    // No need to calculate deletion_time - cleanup logic will handle based on user plan
+
     const { data: secret, error } = await supabase
       .from('blink_secrets')
       .insert([data])
@@ -118,6 +121,17 @@ export async function createSecret(data: CreateSecretData): Promise<{ id: string
     if (error) {
       return { id: '', error: error.message };
     }
+
+    // Track analytics event
+    await trackEvent('create', {
+      userId: data.owner_user_id,
+      secretId: secret.id,
+      eventData: {
+        type: data.type,
+        hasPassword: !!data.password_hash,
+        fileSize: data.file_size,
+      },
+    });
 
     return { id: secret.id };
   } catch (error) {
@@ -139,6 +153,17 @@ export async function getSecret(id: string): Promise<{ secret: Secret | null; er
     if (error) {
       return { secret: null, error: error.message };
     }
+
+    // Track analytics event for secret view
+    await trackEvent('view', {
+      userId: secret.owner_user_id,
+      secretId: secret.id,
+      eventData: {
+        type: secret.type,
+        hasPassword: !!secret.password_hash,
+        viewCount: secret.view_count + 1,
+      },
+    });
 
     return { secret };
   } catch (error) {
@@ -183,6 +208,13 @@ export async function markSecretAsViewed(id: string): Promise<{ success: boolean
  */
 export async function deleteSecret(id: string): Promise<{ success: boolean; error?: string }> {
   try {
+    // Get secret info before deletion for analytics
+    const { data: secret } = await supabase
+      .from('blink_secrets')
+      .select('owner_user_id, type, password_hash')
+      .eq('id', id)
+      .single();
+
     const { error } = await supabase
       .from('blink_secrets')
       .delete()
@@ -190,6 +222,18 @@ export async function deleteSecret(id: string): Promise<{ success: boolean; erro
 
     if (error) {
       return { success: false, error: error.message };
+    }
+
+    // Track analytics event for secret deletion
+    if (secret) {
+      await trackEvent('delete', {
+        userId: secret.owner_user_id,
+        secretId: id,
+        eventData: {
+          type: secret.type,
+          hasPassword: !!secret.password_hash,
+        },
+      });
     }
 
     return { success: true };
@@ -404,31 +448,47 @@ export async function upsertUserSubscription(sub: Omit<Subscription, 'updated_at
 export async function cleanupExpiredSecrets(): Promise<{ deleted: number; error?: string }> {
   try {
     let totalDeleted = 0;
+    const now = new Date().toISOString();
+
+    // Delete expired secrets based on user plan:
+    // - Anonymous secrets: delete immediately when expired
+    // - Free user secrets: delete immediately when expired  
+    // - Pro user secrets: never delete (keep for analytics/history)
 
     // 1) Delete anonymous expired secrets (no owner)
     const anonDel = await supabase
       .from('blink_secrets')
       .delete()
       .is('owner_user_id', null)
-      .lt('expiry_time', new Date().toISOString())
+      .lt('expiry_time', now)
       .select('id');
     if (anonDel.error) return { deleted: totalDeleted, error: anonDel.error.message };
     totalDeleted += anonDel.data?.length || 0;
 
-    // 2) Delete FREE user secrets older than 30 days (long-lived cleanup), regardless of expiry
-    const freeSubs = await supabase
-      .from('blink_subscriptions')
-      .select('user_id')
-      .eq('plan', 'free');
-    if (freeSubs.error) return { deleted: totalDeleted, error: freeSubs.error.message };
-    const freeUserIds = (freeSubs.data || []).map((r: any) => r.user_id);
-    if (freeUserIds.length > 0) {
-      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    // 2) Delete free user expired secrets (owner exists but plan is free)
+    // First get all expired secrets with owners
+    const { data: expiredSecrets, error: fetchError } = await supabase
+      .from('blink_secrets')
+      .select(`
+        id,
+        owner_user_id,
+        blink_subscriptions!inner(plan)
+      `)
+      .not('owner_user_id', 'is', null)
+      .lt('expiry_time', now);
+
+    if (fetchError) return { deleted: totalDeleted, error: fetchError.message };
+
+    // Filter to only free user secrets and delete them
+    const freeUserSecretIds = expiredSecrets
+      ?.filter(secret => (secret.blink_subscriptions as any)?.plan === 'free')
+      ?.map(secret => secret.id) || [];
+
+    if (freeUserSecretIds.length > 0) {
       const freeDel = await supabase
         .from('blink_secrets')
         .delete()
-        .in('owner_user_id', freeUserIds)
-        .lt('created_at', thirtyDaysAgo)
+        .in('id', freeUserSecretIds)
         .select('id');
       if (freeDel.error) return { deleted: totalDeleted, error: freeDel.error.message };
       totalDeleted += freeDel.data?.length || 0;

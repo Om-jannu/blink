@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '@clerk/clerk-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -37,7 +36,6 @@ import { useDropzone } from 'react-dropzone';
 import { toast } from 'sonner';
 
 export function MySecretsPage() {
-  const { userId } = useAuth();
   const { activeTab, setActiveTab, blinkUserId, userPlan } = useStore();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
@@ -56,6 +54,8 @@ export function MySecretsPage() {
   const [previewPassword, setPreviewPassword] = useState('');
   const [previewPasswordRequired, setPreviewPasswordRequired] = useState(false);
   const [previewSecret, setPreviewSecret] = useState<any>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [secretToDelete, setSecretToDelete] = useState<string | null>(null);
   // Removed command dialog state
   const [page, setPage] = useState(1);
   const pageSize = 10;
@@ -80,10 +80,10 @@ export function MySecretsPage() {
 
   const expiryOptions = [
     { value: '15', label: '15 minutes' },
-    { value: '1', label: '1 hour' },
-    { value: '6', label: '6 hours' },
-    { value: '24', label: '1 day' },
-    { value: '168', label: '1 week' },
+    { value: '60', label: '1 hour' },
+    { value: '360', label: '6 hours' },
+    { value: '1440', label: '1 day' },
+    { value: '10080', label: '1 week' },
     ...(plan === 'pro' ? [{ value: 'custom', label: 'Custom' }] : [{ value: 'custom', label: 'Custom (Pro)', disabled: true }]),
   ];
 
@@ -122,16 +122,27 @@ export function MySecretsPage() {
     }
   };
 
-  const handleDeleteSecret = async (secretId: string) => {
+  const handleDeleteSecret = (secretId: string) => {
+    setSecretToDelete(secretId);
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDeleteSecret = async () => {
+    if (!secretToDelete) return;
+    
     try {
-      const { success, error } = await deleteSecret(secretId);
+      const { success, error } = await deleteSecret(secretToDelete);
       if (success) {
-        setUserSecrets(userSecrets.filter(s => s.id !== secretId));
+        setUserSecrets(userSecrets.filter(s => s.id !== secretToDelete));
+        toast.success('Secret deleted successfully');
       } else {
-        console.error('Failed to delete secret:', error);
+        toast.error(error || 'Failed to delete secret');
       }
     } catch (error) {
-      console.error('Failed to delete secret:', error);
+      toast.error('Failed to delete secret');
+    } finally {
+      setDeleteConfirmOpen(false);
+      setSecretToDelete(null);
     }
   };
 
@@ -267,20 +278,8 @@ export function MySecretsPage() {
         // Convert minutes to hours
         expiryHours = parseFloat(customExpiry) / 60;
       } else {
-        expiryHours = parseFloat(expiry);
-      }
-
-      // Plan-based default expiry override for authenticated users
-      if (userId) {
-        if (plan === 'free') {
-          // 1 month from now
-          const oneMonthMs = 30 * 24 * 60 * 60 * 1000;
-          expiryHours = oneMonthMs / (60 * 60 * 1000);
-        } else {
-          // Pro: effectively long-lived (e.g., 5 years)
-          const fiveYearsMs = 5 * 365 * 24 * 60 * 60 * 1000;
-          expiryHours = fiveYearsMs / (60 * 60 * 1000);
-        }
+        // Convert minutes to hours
+        expiryHours = parseFloat(expiry) / 60;
       }
 
       let encrypted: string;
@@ -1067,6 +1066,26 @@ export function MySecretsPage() {
           )
         )}
         
+      </DialogContent>
+    </Dialog>
+
+    {/* Delete Confirmation Dialog */}
+    <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Delete Secret</DialogTitle>
+          <DialogDescription>
+            Are you sure you want to delete this secret? This action cannot be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex justify-end gap-2 mt-4">
+          <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)}>
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={confirmDeleteSecret}>
+            Delete
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
     </div>

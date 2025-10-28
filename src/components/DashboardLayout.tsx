@@ -12,7 +12,9 @@ import {
   Menu, 
   X,
   Shield,
-  Crown
+  Crown,
+  Key,
+  BarChart3
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/lib/store';
@@ -33,6 +35,16 @@ const navigation = [
     name: 'My Secrets',
     href: '/dashboard/secrets',
     icon: Eye,
+  },
+  {
+    name: 'Analytics',
+    href: '/dashboard/analytics',
+    icon: BarChart3,
+  },
+  {
+    name: 'API Keys',
+    href: '/dashboard/api',
+    icon: Key,
   },
   {
     name: 'Settings',
