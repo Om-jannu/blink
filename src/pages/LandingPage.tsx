@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useAuth, SignInButton, UserButton } from '@clerk/clerk-react';
-import { Shield, FileText, Upload, Lock, Copy, Check, Eye, AlertCircle, Download, ExternalLink, User } from 'lucide-react';
+import { useAuth, SignInButton } from '@clerk/clerk-react';
+import { useNavigate } from 'react-router-dom';
+import { Shield, FileText, Upload, Lock, Copy, Check, Eye, AlertCircle, ExternalLink, Code, Key, Terminal, Zap, User, ArrowRight, Clock, Globe, Laptop, Server, Users, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -10,17 +11,18 @@ import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ThemeToggle } from '../components/theme-toggle';
+import { PublicNavbar } from '../components/PublicNavbar';
+import { PublicFooter } from '../components/PublicFooter';
 import { useStore } from '../lib/store';
-import { encryptText, encryptFile, decryptText, decryptFile } from '../lib/encryption';
-import { createSecret, getSecret, markSecretAsViewed, isSecretExpired, cleanupExpiredSecrets, deleteSecret } from '../lib/supabase';
+import { encryptText, encryptFile } from '../lib/encryption';
+import { createSecret, cleanupExpiredSecrets } from '../lib/supabase';
 import { validateFileName } from '../lib/validation';
-import CryptoJS from 'crypto-js';
 import { useDropzone } from 'react-dropzone';
 
 export function LandingPage() {
   const { isSignedIn } = useAuth();
   const { activeTab, setActiveTab, blinkUserId } = useStore();
+  const navigate = useNavigate();
 
   // Shared state for both text and file sharing
   const [text, setText] = useState('');
@@ -31,18 +33,7 @@ export function LandingPage() {
   const [secretUrl, setSecretUrl] = useState('');
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
-
-  // Secret viewing state
-  const [viewingSecret, setViewingSecret] = useState(false);
-  const [secretId, setSecretId] = useState('');
-  const [secretContent, setSecretContent] = useState('');
-  const [secretType, setSecretType] = useState<'text' | 'file'>('text');
-  const [secretFileName, setSecretFileName] = useState('');
-  const [secretFileSize, setSecretFileSize] = useState(0);
-  const [secretPassword, setSecretPassword] = useState('');
-  const [passwordRequired, setPasswordRequired] = useState(false);
-  const [secretViewed, setSecretViewed] = useState(false);
-  const [viewingError, setViewingError] = useState('');
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
   const expiryOptions = [
     { value: '15', label: '15 minutes' },
@@ -53,13 +44,13 @@ export function LandingPage() {
     { value: 'custom', label: 'Custom' },
   ];
 
-  // Cleanup expired secrets on load and periodically
+  // Cleanup expired secrets on component mount
   useEffect(() => {
     const cleanup = async () => {
       try {
         await cleanupExpiredSecrets();
       } catch (error) {
-        console.warn('Failed to cleanup expired secrets:', error);
+        console.error('Failed to cleanup expired secrets:', error);
       }
     };
 
@@ -68,239 +59,34 @@ export function LandingPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // Check for secret viewing URL on load
-  useEffect(() => {
-    const path = window.location.pathname;
-    const hash = window.location.hash;
-
-    console.log('URL Detection:', { path, hash });
-
-    if (path.startsWith('/view/')) {
-      const id = path.split('/view/')[1];
-
-      console.log('Secret URL detected:', { path, id, idLength: id?.length, idType: typeof id });
-
-      if (id && id.trim() !== '') {
-        console.log('Setting viewingSecret to true');
-        setSecretId(id);
-        setViewingSecret(true);
-        loadSecret(id);
-      } else {
-        console.error('Invalid secret ID:', { id, path });
-      }
-    }
-  }, []);
-
-  // Debug viewingSecret state changes
-  useEffect(() => {
-    console.log('viewingSecret state changed:', viewingSecret);
-  }, [viewingSecret]);
-
-  // Debug secretId state changes
-  useEffect(() => {
-    console.log('secretId state changed:', secretId);
-  }, [secretId]);
-
-  const loadSecret = async (id: string) => {
+  const copyToClipboard = async () => {
     try {
-       console.log('Loading secret with ID:', id);
-      console.log('ID type:', typeof id);
-      console.log('ID length:', id?.length);
-      console.log('ID trimmed:', id?.trim());
-      const { secret, error } = await getSecret(id);
-      if (error) {
-        console.log('Secret retrieval error:', error);
-        if (error.includes('No rows found') || error.includes('PGRST116') || error.includes('Cannot coerce the result to a single JSON object')) {
-          setViewingError('This secret has been deleted or does not exist. It may have been viewed already (one-time secrets) or expired.');
-        } else {
-          setViewingError('Failed to load secret');
-        }
-        return;
-      }
-      if (!secret) {
-        setViewingError('This secret has been deleted or does not exist');
-        return;
-      }
-
-      console.log('Secret loaded:', secret);
-      console.log('Secret ID from database:', secret.id);
-      console.log('Secret owner_user_id from database:', secret.owner_user_id);
-
-      if (isSecretExpired(secret.expiry_time)) {
-        setViewingError('This secret has expired');
-        return;
-      }
-
-      setSecretType(secret.type);
-      setSecretFileName(secret.file_name || '');
-      setSecretFileSize(secret.file_size || 0);
-      setPasswordRequired(!!secret.password_hash);
-
-      console.log('Secret type:', secret.type, 'Password required:', !!secret.password_hash);
-
-      // Auto-decrypt if no password is required
-      if (!secret.password_hash) {
-        await handleSecretView(secret);
-      }
-    } catch (error) {
-      console.error('Failed to load secret:', error);
-      setViewingError('Failed to load secret');
+      await navigator.clipboard.writeText(secretUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
     }
   };
 
-  const handleSecretPasswordSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!secretPassword) return;
-
+  const copyCodeToClipboard = async (code: string, codeId: string) => {
     try {
-      const { secret, error } = await getSecret(secretId);
-      if (error) {
-        console.log('Secret retrieval error in password submit:', error);
-        if (error.includes('No rows found') || error.includes('PGRST116') || error.includes('Cannot coerce the result to a single JSON object')) {
-          setViewingError('This secret has been deleted or does not exist. It may have been viewed already (one-time secrets) or expired.');
-        } else {
-          setViewingError('Failed to load secret');
-        }
-        return;
-      }
-      if (!secret) {
-        setViewingError('This secret has been deleted or does not exist');
-        return;
-      }
-
-      if (secret.password_hash && secret.password_hash !== btoa(secretPassword)) {
-        setViewingError('Invalid password');
-        return;
-      }
-
-      // For password-protected secrets, derive the key from password + salt
-      const salt = secret.encryption_key_or_salt;
-
-      // Derive the actual decryption key from password + salt
-      const derivedKey = CryptoJS.PBKDF2(secretPassword, salt, {
-        keySize: 256 / 32,
-        iterations: 100000
-      }).toString();
-
-      await handleSecretViewWithKey(secret, derivedKey);
-    } catch (error) {
-      setViewingError('Failed to decrypt secret');
+      await navigator.clipboard.writeText(code);
+      setCopiedCode(codeId);
+      setTimeout(() => setCopiedCode(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy code:', err);
     }
   };
 
-  const handleSecretView = async (secret: any) => {
-    try {
-      // For anonymous secrets, use the encryption key from the database
-      const key = secret.encryption_key_or_salt;
-      console.log('Decrypting secret with key from database:', key);
-      await handleSecretViewWithKey(secret, key);
-    } catch (error) {
-      console.error('Failed to decrypt secret:', error);
-      setViewingError('Failed to decrypt secret');
-    }
+  const openInNewTab = () => {
+    window.open(secretUrl, '_blank', 'noopener,noreferrer');
   };
 
-  const handleSecretViewWithKey = async (secret: any, key: string) => {
-    try {
-      console.log('Decrypting secret:', { type: secret.type, keyLength: key.length });
-      let decryptedContent: string;
-      if (secret.type === 'text') {
-        const result = decryptText(secret.encrypted_content, key);
-        if (!result.success) {
-          console.error('Text decryption failed');
-          setViewingError('Failed to decrypt secret');
-          return;
-        }
-        decryptedContent = result.decrypted;
-        console.log('Text decrypted successfully');
-      } else { // For file type
-        const result = await decryptFile(secret.encrypted_content, key, secret.file_name || 'file');
-        if (!result) {
-          console.error('File decryption failed');
-          setViewingError('Failed to decrypt secret');
-          return;
-        }
-        const arrayBuffer = await result.arrayBuffer();
-        const uint8Array = new Uint8Array(arrayBuffer);
-        const binaryString = Array.from(uint8Array).map(byte => String.fromCharCode(byte)).join('');
-        decryptedContent = btoa(binaryString); // Store as Base64
-        console.log('File decrypted successfully');
-      }
-
-      setSecretContent(decryptedContent);
-      setSecretViewed(true);
-      setPasswordRequired(false);
-
-      console.log('Secret viewed successfully');
-
-      // Mark as viewed
-      await markSecretAsViewed(secret.id);
-
-      // One-time for anonymous: delete after first successful view
-      console.log('Secret owner_user_id:', secret.owner_user_id);
-      console.log('Secret ID to delete:', secret.id);
-      console.log('Secret ID type:', typeof secret.id);
-      console.log('Secret ID length:', secret.id?.length);
-      
-      if (!secret.owner_user_id) {
-        console.log('Deleting anonymous secret:', secret.id);
-        const deleteResult = await deleteSecret(secret.id);
-        console.log('Delete result:', deleteResult);
-        if (deleteResult.success) {
-          console.log('Anonymous secret deleted successfully');
-        } else {
-          console.error('Failed to delete secret:', deleteResult.error);
-        }
-      } else {
-        console.log('Secret has owner, not deleting');
-      }
-    } catch (error) {
-      console.error('Failed to decrypt secret:', error);
-      setViewingError('Failed to decrypt secret');
-    }
-  };
-
-  const downloadFile = () => {
-    if (!secretContent || !secretFileName) return;
-
-    try {
-      const binaryString = atob(secretContent); // Decode Base64
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-
-      // Detect MIME type based on file extension
-      const extension = secretFileName.split('.').pop()?.toLowerCase();
-      let mimeType = 'application/octet-stream';
-
-      if (extension === 'png') mimeType = 'image/png';
-      else if (extension === 'jpg' || extension === 'jpeg') mimeType = 'image/jpeg';
-      else if (extension === 'gif') mimeType = 'image/gif';
-      else if (extension === 'pdf') mimeType = 'application/pdf';
-      else if (extension === 'txt') mimeType = 'text/plain';
-      else if (extension === 'doc') mimeType = 'application/msword';
-      else if (extension === 'docx') mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-
-      const blob = new Blob([bytes], { type: mimeType });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = secretFileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Download failed:', error);
-    }
-  };
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+  const { getRootProps, getInputProps } = useDropzone({
     onDrop: (acceptedFiles) => {
-      if (acceptedFiles.length > 0) {
-        const file = acceptedFiles[0];
-
+      const file = acceptedFiles[0];
+      if (file) {
         // Validate file name
         const validation = validateFileName(file.name);
         if (!validation.isValid) {
@@ -316,31 +102,8 @@ export function LandingPage() {
     maxSize: 5 * 1024 * 1024, // 5MB limit for anonymous users
   });
 
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
-  const copyToClipboard = async () => {
-    try {
-      await navigator.clipboard.writeText(secretUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy:', err);
-    }
-  };
-
-  const openInNewTab = () => {
-    window.open(secretUrl, '_blank', 'noopener,noreferrer');
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (activeTab === 'text' && !text.trim()) return;
     if (activeTab === 'file' && !file) return;
 
@@ -386,7 +149,7 @@ export function LandingPage() {
           expiry_time: new Date(Date.now() + expiryHours * 60 * 60 * 1000).toISOString(),
           password_hash: undefined,
           encryption_key_or_salt: key,
-          owner_user_id: isSignedIn ? blinkUserId : undefined // Signed-in users have blinkUserId, anonymous users have no owner
+          owner_user_id: isSignedIn ? blinkUserId : undefined,
         };
       } else {
         const result = await encryptFile(file!);
@@ -400,28 +163,22 @@ export function LandingPage() {
           expiry_time: new Date(Date.now() + expiryHours * 60 * 60 * 1000).toISOString(),
           password_hash: undefined,
           encryption_key_or_salt: key,
-          owner_user_id: isSignedIn ? blinkUserId : undefined // Signed-in users have blinkUserId, anonymous users have no owner
+          owner_user_id: isSignedIn ? blinkUserId : undefined,
         };
       }
 
-      console.log('Creating secret with data:', secretData);
-      const { id, error: dbError } = await createSecret(secretData);
+      const result = await createSecret(secretData);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
 
-      if (dbError) throw new Error(dbError);
-      console.log('Secret created with ID:', id);
-
-      // Encryption key is now stored in the database
-
-      const secretUrl = `${window.location.origin}/view/${id}#${encodeURIComponent(key)}`;
+      const baseUrl = window.location.origin;
+      const secretUrl = `${baseUrl}/view/${result.id}#${encodeURIComponent(key)}`;
       setSecretUrl(secretUrl);
-      // Don't call resetForm() here - we want to show the success screen
-      setText('');
-      setFile(null);
-      setExpiry('15');
-      setCustomExpiry('');
-      setError('');
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Failed to create secret');
+      console.error('Error creating secret:', error);
+      setError('Failed to create secret');
     } finally {
       setIsLoading(false);
     }
@@ -429,500 +186,862 @@ export function LandingPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                <Shield className="w-5 h-5 text-primary-foreground" />
-              </div>
-              <span className="text-2xl font-bold">Blink</span>
-            </div>
-            <div className="flex items-center gap-4">
-              <Badge variant="secondary">Secure • Private • Anonymous</Badge>
-              {isSignedIn ? (
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => window.location.href = '/dashboard'}
-                  >
-                    <User className="w-4 h-4 mr-2" />
-                    Go to Dashboard
-                  </Button>
-                  <UserButton afterSignOutUrl="/" />
-                </div>
-              ) : (
-                <SignInButton mode="modal">
-                  <Button variant="outline" size="sm">
-                    <User className="w-4 h-4 mr-2" />
-                    Sign In
-                  </Button>
-                </SignInButton>
-              )}
-              <ThemeToggle />
-            </div>
-          </div>
-        </div>
-      </header>
+      <PublicNavbar />
 
-      {/* Main Content */}
-      <main className="container mx-auto px-4 py-8">
-        <div className="max-w-7xl mx-auto">
-          {/* Secret Viewer - Available for all users */}
-          {viewingSecret && (
-            <Card className="max-w-2xl mx-auto mb-8">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Shield className="w-5 h-5 text-primary" />
-                    <CardTitle>Secret Viewer</CardTitle>
-                  </div>
-                  <Badge variant="secondary">
-                    {secretType === 'text' ? 'Text' : 'File'}
-                  </Badge>
-                </div>
-                <CardDescription>
-                  {secretType === 'file' && secretFileName && (
-                    <div className="flex items-center gap-2 mt-2">
-                      <Upload className="w-4 h-4" />
-                      <span>{secretFileName} ({formatFileSize(secretFileSize)})</span>
-                    </div>
-                  )}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {passwordRequired ? (
-                  <form onSubmit={handleSecretPasswordSubmit} className="space-y-4">
-                    <div>
-                      <Label htmlFor="secret-password">Password Required</Label>
-                      <Input
-                        id="secret-password"
-                        type="password"
-                        value={secretPassword}
-                        onChange={(e) => setSecretPassword(e.target.value)}
-                        placeholder="Enter password to view secret"
-                        required
-                      />
-                    </div>
-                    <Button type="submit" className="w-full">
-                      <Lock className="w-4 h-4 mr-2" />
-                      Decrypt Secret
-                    </Button>
-                    {viewingError && (
-                      <div className="space-y-4">
-                        <Alert variant="destructive">
-                          <AlertCircle className="h-4 w-4" />
-                          <AlertDescription>{viewingError}</AlertDescription>
-                        </Alert>
-                        <div className="flex justify-center pt-4">
-                          <Button 
-                            onClick={() => window.location.href = '/'}
-                            variant="outline"
-                            className="w-full"
-                          >
-                            <Shield className="w-4 h-4 mr-2" />
-                            Create Your Own Secret
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </form>
-                ) : secretViewed ? (
-                  <div className="space-y-4">
-                    {secretType === 'text' ? (
-                      <div className="p-4 bg-muted rounded-lg">
-                        <pre className="whitespace-pre-wrap">{secretContent}</pre>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        <div className="p-4 bg-muted rounded-lg text-center">
-                          <Upload className="w-12 h-12 mx-auto mb-2 text-muted-foreground" />
-                          <p className="text-sm text-muted-foreground">
-                            File ready for download: {secretFileName}
-                          </p>
-                        </div>
-                        <Button onClick={downloadFile} className="w-full">
-                          <Download className="w-4 h-4 mr-2" />
-                          Download {secretFileName}
-                        </Button>
-                      </div>
-                    )}
-                    <Alert>
-                      <Eye className="h-4 w-4" />
-                      <AlertDescription>
-                        This secret has been viewed and is no longer accessible.
-                        The link will not work again.
-                      </AlertDescription>
-                    </Alert>
-                    
-                    <div className="flex justify-center pt-4">
-                      <Button 
-                        onClick={() => window.location.href = '/'}
-                        variant="outline"
-                        className="w-full"
-                      >
-                        <Shield className="w-4 h-4 mr-2" />
-                        Create Your Own Secret
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <Eye className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-                    <p className="text-muted-foreground">Loading secret...</p>
-                    {viewingError && (
-                      <div className="space-y-4">
-                        <Alert variant="destructive">
-                          <AlertCircle className="h-4 w-4" />
-                          <AlertDescription>{viewingError}</AlertDescription>
-                        </Alert>
-                        <div className="flex justify-center pt-4">
-                          <Button 
-                            onClick={() => window.location.href = '/'}
-                            variant="outline"
-                            className="w-full"
-                          >
-                            <Shield className="w-4 h-4 mr-2" />
-                            Create Your Own Secret
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Main Landing Page Content */}
-          {!viewingSecret && (
-            <div className="grid lg:grid-cols-2 gap-12 items-center min-h-[600px]">
-              {/* Left Column - Content */}
+      {/* Hero Section */}
+      <main className="relative">
+        {/* Background Pattern */}
+        <div className="absolute inset-0 bg-grid-pattern opacity-5 pointer-events-none"></div>
+        
+        {/* Hero Content */}
+        <section className="relative container mx-auto px-4 py-20 lg:py-32">
+          <div className="max-w-7xl mx-auto">
+            <div className="grid lg:grid-cols-2 gap-16 items-center">
+              {/* Left Column - Hero Content */}
               <div className="space-y-8">
                 <div className="space-y-6">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center">
-                      <Shield className="w-7 h-7 text-primary-foreground" />
-                    </div>
-                    <div>
-                      <h1 className="text-4xl font-bold tracking-tight">Blink</h1>
-                      <p className="text-lg text-muted-foreground">Secure Secret Sharing</p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <h2 className="text-3xl font-bold">
-                      Share secrets that <span className="text-primary">disappear forever</span>
-                    </h2>
-                    <p className="text-xl text-muted-foreground leading-relaxed">
-                      Send encrypted messages and files that self-destruct after viewing.
-                      Zero-knowledge encryption ensures your secrets stay private.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                  <div className="space-y-2">
-                    <div className="w-10 h-10 bg-green-100 dark:bg-green-900/20 rounded-lg flex items-center justify-center">
-                      <Lock className="w-5 h-5 text-green-600" />
-                    </div>
-                    <h3 className="font-semibold">End-to-End Encrypted</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Your data is encrypted client-side before transmission
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/20 rounded-lg flex items-center justify-center">
-                      <Eye className="w-5 h-5 text-blue-600" />
-                    </div>
-                    <h3 className="font-semibold">One-Time View</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Secrets disappear after being viewed once
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/20 rounded-lg flex items-center justify-center">
-                      <Shield className="w-5 h-5 text-purple-600" />
-                    </div>
-                    <h3 className="font-semibold">Anonymous</h3>
-                    <p className="text-sm text-muted-foreground">
-                      No account required for basic sharing
-                    </p>
-                  </div>
+                  <h1 className="text-5xl lg:text-6xl font-bold leading-tight">
+                    Share secrets{' '}
+                    <span className="bg-gradient-to-r from-primary to-blue-600 bg-clip-text text-transparent">
+                      securely
+                    </span>
+                  </h1>
+                  <p className="text-xl text-muted-foreground leading-relaxed">
+                    Send encrypted messages and files that disappear after viewing. 
+                    No registration required, complete anonymity guaranteed.
+                  </p>
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-4">
                   <Button
                     size="lg"
-                    className="bg-primary hover:bg-primary/90"
+                    className="bg-primary hover:bg-primary/90 text-lg px-8 py-6"
                     onClick={() => document.getElementById('secret-builder')?.scrollIntoView({ behavior: 'smooth' })}
                   >
                     <Shield className="w-5 h-5 mr-2" />
                     Start Sharing
+                    <ArrowRight className="w-5 h-5 ml-2" />
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="lg"
-                    onClick={() => window.location.href = '/dashboard'}
-                  >
-                    <User className="w-5 h-5 mr-2" />
-                    Sign In for More Features
-                  </Button>
+                  <SignInButton mode="modal">
+                    <Button
+                      variant="outline"
+                      size="lg"
+                      className="text-lg px-8 py-6"
+                    >
+                      <User className="w-5 h-5 mr-2" />
+                      Sign In for Pro Features
+                    </Button>
+                  </SignInButton>
+                </div>
+
+                <div className="flex items-center gap-8 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-green-500" />
+                    <span>No registration required</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-green-500" />
+                    <span>End-to-end encrypted</span>
+                  </div>
                 </div>
               </div>
 
               {/* Right Column - Secret Builder */}
               <div id="secret-builder" className="lg:sticky lg:top-8">
-                {/* Success/Share UI shown ONLY when not viewing a secret */}
-                {!viewingSecret && (
-                  secretUrl ? (
-                    <Card className="w-full">
-                      <CardHeader className="text-center">
-                        <div className="w-16 h-16 bg-green-100 dark:bg-green-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                          <Check className="w-8 h-8 text-green-600" />
+                {secretUrl ? (
+                  <Card className="w-full border-2 border-green-200 dark:border-green-800">
+                    <CardHeader className="text-center">
+                      <div className="w-16 h-16 bg-green-100 dark:bg-green-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Check className="w-8 h-8 text-green-600" />
+                      </div>
+                      <CardTitle className="text-2xl">Secret Created!</CardTitle>
+                      <CardDescription>
+                        Your encrypted {activeTab === 'text' ? 'message' : 'file'} is ready to share.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                      <div className="space-y-2">
+                        <Label>Share this link:</Label>
+                        <div className="flex items-center gap-2">
+                          <code className="flex-1 text-sm bg-muted p-3 rounded border truncate" title={secretUrl}>
+                            {secretUrl}
+                          </code>
+                          <Button size="sm" variant="outline" onClick={copyToClipboard}>
+                            {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                          </Button>
                         </div>
-                        <CardTitle className="text-2xl">Secret Created Successfully!</CardTitle>
-                        <CardDescription>
-                          Your encrypted {activeTab === 'text' ? 'message' : 'file'} is ready to share.
-                          The link will expire after viewing or at the set time.
-                        </CardDescription>
-                      </CardHeader>
-
-                      <CardContent className="space-y-6">
-                        <div className="space-y-2">
-                          <Label>Share this link:</Label>
-                          <div className="flex items-center gap-2">
-                            <code className="flex-1 text-sm bg-muted p-2 rounded border truncate" title={secretUrl}>
-                              {secretUrl}
-                            </code>
-                            <Button
-                              onClick={copyToClipboard}
-                              variant="outline"
-                              size="sm"
-                            >
-                              {copied ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
-                            </Button>
-                          </div>
-                        </div>
-
-                        <div className="flex flex-wrap gap-2 justify-center">
-                          <Button onClick={() => {
+                      </div>
+                      <div className="flex gap-2">
+                        <Button onClick={copyToClipboard} variant="outline" className="flex-1">
+                          {copied ? <><Check className="w-4 h-4 mr-2" />Copied!</> : <><Copy className="w-4 h-4 mr-2" />Copy Link</>}
+                        </Button>
+                        <Button onClick={openInNewTab} variant="outline" className="flex-1">
+                          <ExternalLink className="w-4 h-4 mr-2" />
+                          Open
+                        </Button>
+                      </div>
+                      <div className="pt-4 border-t">
+                        <Button
+                          onClick={() => {
                             setSecretUrl('');
                             setText('');
                             setFile(null);
                             setExpiry('15');
                             setCustomExpiry('');
                             setError('');
-                          }} variant="outline">
-                            Create Another
-                          </Button>
-                          <Button onClick={copyToClipboard}>
-                            {copied ? 'Copied!' : 'Copy Link'}
-                          </Button>
-                          <Button onClick={openInNewTab} variant="outline">
-                            <ExternalLink className="w-4 h-4 mr-2" />
-                            Open in New Tab
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ) : (
-                    /* Sharing Interface with Tabs */
-                    <Card className="w-full">
-                      <CardHeader className="text-center">
-                        <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                          <Shield className="w-8 h-8 text-primary" />
-                        </div>
-                        <CardTitle className="text-2xl">Share a Secret</CardTitle>
-                        <CardDescription className="text-center">
-                          Choose how you want to share your secret
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'text' | 'file')} className="w-full">
-                          <TabsList className="grid w-full grid-cols-2">
-                            <TabsTrigger value="text" className="flex items-center gap-2">
-                              <FileText className="w-4 h-4" />
-                              Text
-                            </TabsTrigger>
-                            <TabsTrigger value="file" className="flex items-center gap-2">
-                              <Upload className="w-4 h-4" />
-                              File
-                            </TabsTrigger>
-                          </TabsList>
-
-                          <TabsContent value="text" className="space-y-4 mt-6">
-                            <form onSubmit={handleSubmit} className="space-y-4">
-                              <div>
-                                <Label htmlFor="text">Your Secret Message</Label>
-                                <Textarea
-                                  id="text"
-                                  value={text}
-                                  onChange={(e) => setText(e.target.value)}
-                                  placeholder="Enter your secret message here..."
-                                  className="min-h-[120px]"
+                            setActiveTab('text');
+                          }}
+                          variant="outline"
+                          className="w-full"
+                        >
+                          <Shield className="w-4 h-4 mr-2" />
+                          Create Another Secret
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <Card className="w-full shadow-2xl">
+                    <CardHeader>
+                      <CardTitle className="text-center text-2xl">Create Secret</CardTitle>
+                      <CardDescription className="text-center">
+                        Share encrypted messages and files that disappear after viewing
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'text' | 'file')}>
+                        <TabsList className="grid w-full grid-cols-2">
+                          <TabsTrigger value="text">Text</TabsTrigger>
+                          <TabsTrigger value="file">File</TabsTrigger>
+                        </TabsList>
+                        <TabsContent value="text" className="space-y-4">
+                          <form onSubmit={handleSubmit} className="space-y-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="text-content">Secret Message</Label>
+                              <Textarea
+                                id="text-content"
+                                placeholder="Enter your secret message..."
+                                value={text}
+                                onChange={(e) => setText(e.target.value)}
+                                className="min-h-[120px]"
+                                required
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="expiry">Expires in</Label>
+                              <Select value={expiry} onValueChange={setExpiry}>
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {expiryOptions.map((option) => (
+                                    <SelectItem key={option.value} value={option.value}>
+                                      {option.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            {expiry === 'custom' && (
+                              <div className="space-y-2">
+                                <Label htmlFor="custom-expiry">Custom expiry (minutes)</Label>
+                                <Input
+                                  id="custom-expiry"
+                                  type="number"
+                                  placeholder="Enter minutes (1-10080)"
+                                  value={customExpiry}
+                                  onChange={(e) => setCustomExpiry(e.target.value)}
+                                  min="1"
+                                  max="10080"
                                   required
                                 />
                               </div>
-
-                              <div className="grid gap-4 md:grid-cols-1">
-                                <div>
-                                  <Label htmlFor="expiry">Expiry Time</Label>
-                                  <Select value={expiry} onValueChange={setExpiry}>
-                                    <SelectTrigger>
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {expiryOptions.map((option) => (
-                                        <SelectItem key={option.value} value={option.value}>
-                                          {option.label}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
+                            )}
+                            {error && (
+                              <Alert variant="destructive">
+                                <AlertCircle className="h-4 w-4" />
+                                <AlertDescription>{error}</AlertDescription>
+                              </Alert>
+                            )}
+                            <Button type="submit" className="w-full" disabled={isLoading || !text.trim()}>
+                              {isLoading ? (
+                                <>
+                                  <div className="animate-spin w-4 h-4 mr-2 border-2 border-current border-t-transparent rounded-full" />
+                                  Creating...
+                                </>
+                              ) : (
+                                <>
+                                  <Shield className="w-4 h-4 mr-2" />
+                                  Create Secret
+                                </>
+                              )}
+                            </Button>
+                          </form>
+                        </TabsContent>
+                        <TabsContent value="file" className="space-y-4">
+                          <form onSubmit={handleSubmit} className="space-y-4">
+                            <div className="space-y-2">
+                              <Label>Upload File</Label>
+                              <div
+                                {...getRootProps()}
+                                className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center hover:border-muted-foreground/50 transition-colors cursor-pointer"
+                              >
+                                <input {...getInputProps()} />
+                                <Upload className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+                                <p className="text-lg font-medium mb-2">
+                                  {file ? file.name : 'Drop your file here or click to browse'}
+                                </p>
+                                <p className="text-sm text-muted-foreground">
+                                  Maximum file size: 5MB
+                                </p>
                               </div>
-
-                              {expiry === 'custom' && (
-                                <div>
-                                  <Label htmlFor="custom-expiry">Custom Expiry (minutes)</Label>
-                                  <Input
-                                    id="custom-expiry"
-                                    type="number"
-                                    min="1"
-                                    max="10080"
-                                    step="1"
-                                    value={customExpiry}
-                                    onChange={(e) => setCustomExpiry(e.target.value)}
-                                    placeholder="Enter minutes (e.g., 15, 60, 120)"
-                                  />
-                                </div>
-                              )}
-
-                              {error && (
-                                <Alert variant="destructive">
-                                  <AlertCircle className="h-4 w-4" />
-                                  <AlertDescription>{error}</AlertDescription>
-                                </Alert>
-                              )}
-
-                              <Button type="submit" className="w-full" disabled={isLoading || !text.trim()}>
-                                {isLoading ? (
-                                  <>
-                                    <Lock className="w-4 h-4 mr-2 animate-spin" />
-                                    Creating Secret...
-                                  </>
-                                ) : (
-                                  <>
-                                    <Shield className="w-4 h-4 mr-2" />
-                                    Create Secret Link
-                                  </>
-                                )}
-                              </Button>
-                            </form>
-                          </TabsContent>
-
-                          <TabsContent value="file" className="space-y-4 mt-6">
-                            <form onSubmit={handleSubmit} className="space-y-4">
-                              <div>
-                                <Label>Upload File</Label>
-                                <div
-                                  {...getRootProps()}
-                                  className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${isDragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/25'
-                                    }`}
-                                >
-                                  <input {...getInputProps()} />
-                                  <Upload className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-                                  {file ? (
-        <div>
-                                      <p className="font-medium">{file.name}</p>
-                                      <p className="text-sm text-muted-foreground">
-                                        {formatFileSize(file.size)}
-                                      </p>
-        </div>
-                                  ) : (
-                                    <div>
-                                      <p className="font-medium">
-                                        {isDragActive ? 'Drop the file here' : 'Drag & drop a file here, or click to select'}
-                                      </p>
-                                      <p className="text-sm text-muted-foreground">
-                                        Maximum file size: 5MB
-        </p>
-      </div>
-                                  )}
-                                </div>
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="expiry">Expires in</Label>
+                              <Select value={expiry} onValueChange={setExpiry}>
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {expiryOptions.map((option) => (
+                                    <SelectItem key={option.value} value={option.value}>
+                                      {option.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            {expiry === 'custom' && (
+                              <div className="space-y-2">
+                                <Label htmlFor="custom-expiry">Custom expiry (minutes)</Label>
+                                <Input
+                                  id="custom-expiry"
+                                  type="number"
+                                  placeholder="Enter minutes (1-10080)"
+                                  value={customExpiry}
+                                  onChange={(e) => setCustomExpiry(e.target.value)}
+                                  min="1"
+                                  max="10080"
+                                  required
+                                />
                               </div>
-
-                              <div className="grid gap-4 md:grid-cols-1">
-                                <div>
-                                  <Label htmlFor="file-expiry">Expiry Time</Label>
-                                  <Select value={expiry} onValueChange={setExpiry}>
-                                    <SelectTrigger>
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {expiryOptions.map((option) => (
-                                        <SelectItem key={option.value} value={option.value}>
-                                          {option.label}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              </div>
-
-                              {expiry === 'custom' && (
-                                <div>
-                                  <Label htmlFor="file-custom-expiry">Custom Expiry (minutes)</Label>
-                                  <Input
-                                    id="file-custom-expiry"
-                                    type="number"
-                                    min="1"
-                                    max="10080"
-                                    step="1"
-                                    value={customExpiry}
-                                    onChange={(e) => setCustomExpiry(e.target.value)}
-                                    placeholder="Enter minutes (e.g., 15, 60, 120)"
-                                  />
-                                </div>
+                            )}
+                            {error && (
+                              <Alert variant="destructive">
+                                <AlertCircle className="h-4 w-4" />
+                                <AlertDescription>{error}</AlertDescription>
+                              </Alert>
+                            )}
+                            <Button type="submit" className="w-full" disabled={isLoading || !file}>
+                              {isLoading ? (
+                                <>
+                                  <div className="animate-spin w-4 h-4 mr-2 border-2 border-current border-t-transparent rounded-full" />
+                                  Creating...
+                                </>
+                              ) : (
+                                <>
+                                  <Shield className="w-4 h-4 mr-2" />
+                                  Create Secret
+                                </>
                               )}
-
-                              {error && (
-                                <Alert variant="destructive">
-                                  <AlertCircle className="h-4 w-4" />
-                                  <AlertDescription>{error}</AlertDescription>
-                                </Alert>
-                              )}
-
-                              <Button type="submit" className="w-full" disabled={isLoading || !file}>
-                                {isLoading ? (
-                                  <>
-                                    <Lock className="w-4 h-4 mr-2 animate-spin" />
-                                    Creating Secret...
-                                  </>
-                                ) : (
-                                  <>
-                                    <Shield className="w-4 h-4 mr-2" />
-                                    Create Secret Link
-                                  </>
-                                )}
-                              </Button>
-                            </form>
-                          </TabsContent>
-                        </Tabs>
-                      </CardContent>
-                    </Card>
-                  )
+                            </Button>
+                          </form>
+                        </TabsContent>
+                      </Tabs>
+                    </CardContent>
+                  </Card>
                 )}
               </div>
             </div>
-          )}
-        </div>
+          </div>
+        </section>
+
+        {/* Features Section */}
+        <section className="py-20 bg-muted/30">
+          <div className="container mx-auto px-4">
+            <div className="max-w-3xl mx-auto text-center mb-16">
+              <h2 className="text-4xl font-bold mb-6">
+                Why choose <span className="text-primary">Blink</span>?
+              </h2>
+              <p className="text-xl text-muted-foreground">
+                Built with security and privacy in mind, Blink offers the most secure way to share sensitive information.
+              </p>
+            </div>
+            
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
+              <Card className="p-6 text-center hover:shadow-lg transition-shadow">
+                <div className="w-12 h-12 bg-green-100 dark:bg-green-900/20 rounded-xl flex items-center justify-center mx-auto mb-4">
+                  <Lock className="w-6 h-6 text-green-600" />
+                </div>
+                <h3 className="text-xl font-semibold mb-2">End-to-End Encryption</h3>
+                <p className="text-muted-foreground">
+                  Your data is encrypted client-side before transmission. We never see your secrets.
+                </p>
+              </Card>
+
+              <Card className="p-6 text-center hover:shadow-lg transition-shadow">
+                <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/20 rounded-xl flex items-center justify-center mx-auto mb-4">
+                  <Eye className="w-6 h-6 text-blue-600" />
+                </div>
+                <h3 className="text-xl font-semibold mb-2">One-Time View</h3>
+                <p className="text-muted-foreground">
+                  Secrets disappear after being viewed once, ensuring maximum security.
+                </p>
+              </Card>
+
+              <Card className="p-6 text-center hover:shadow-lg transition-shadow">
+                <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/20 rounded-xl flex items-center justify-center mx-auto mb-4">
+                  <Shield className="w-6 h-6 text-purple-600" />
+                </div>
+                <h3 className="text-xl font-semibold mb-2">Anonymous Sharing</h3>
+                <p className="text-muted-foreground">
+                  No account required for basic sharing. Complete anonymity guaranteed.
+                </p>
+              </Card>
+
+              <Card className="p-6 text-center hover:shadow-lg transition-shadow">
+                <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900/20 rounded-xl flex items-center justify-center mx-auto mb-4">
+                  <Clock className="w-6 h-6 text-orange-600" />
+                </div>
+                <h3 className="text-xl font-semibold mb-2">Auto-Expiry</h3>
+                <p className="text-muted-foreground">
+                  Set custom expiry times from 15 minutes to 1 week. Secrets auto-delete.
+                </p>
+              </Card>
+
+              <Card className="p-6 text-center hover:shadow-lg transition-shadow">
+                <div className="w-12 h-12 bg-red-100 dark:bg-red-900/20 rounded-xl flex items-center justify-center mx-auto mb-4">
+                  <FileText className="w-6 h-6 text-red-600" />
+                </div>
+                <h3 className="text-xl font-semibold mb-2">File & Text Support</h3>
+                <p className="text-muted-foreground">
+                  Share any type of file or text message securely with password protection.
+                </p>
+              </Card>
+
+              <Card className="p-6 text-center hover:shadow-lg transition-shadow">
+                <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/20 rounded-xl flex items-center justify-center mx-auto mb-4">
+                  <Globe className="w-6 h-6 text-indigo-600" />
+                </div>
+                <h3 className="text-xl font-semibold mb-2">Global Access</h3>
+                <p className="text-muted-foreground">
+                  Access your secrets from anywhere in the world with our global infrastructure.
+                </p>
+              </Card>
+            </div>
+          </div>
+        </section>
+
+        {/* Stats Section */}
+        <section className="py-20">
+          <div className="container mx-auto px-4">
+            <div className="max-w-4xl mx-auto">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+                <div>
+                  <div className="text-4xl font-bold text-primary mb-2">10K+</div>
+                  <div className="text-muted-foreground">Secrets Shared</div>
+                </div>
+                <div>
+                  <div className="text-4xl font-bold text-primary mb-2">99.9%</div>
+                  <div className="text-muted-foreground">Uptime</div>
+                </div>
+                <div>
+                  <div className="text-4xl font-bold text-primary mb-2">256-bit</div>
+                  <div className="text-muted-foreground">Encryption</div>
+                </div>
+                <div>
+                  <div className="text-4xl font-bold text-primary mb-2">0</div>
+                  <div className="text-muted-foreground">Data Breaches</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Use Cases Section */}
+        <section className="py-20 bg-muted/30">
+          <div className="container mx-auto px-4">
+            <div className="max-w-6xl mx-auto">
+              <div className="text-center mb-16">
+                <h2 className="text-4xl font-bold mb-6">Perfect for every use case</h2>
+                <p className="text-xl text-muted-foreground">
+                  From personal secrets to business communications, Blink has you covered.
+                </p>
+              </div>
+
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <Card className="p-6">
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/20 rounded-lg flex items-center justify-center">
+                      <Users className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <h3 className="text-xl font-semibold">Personal</h3>
+                  </div>
+                  <ul className="space-y-2 text-muted-foreground">
+                    <li>• Share passwords with family</li>
+                    <li>• Send sensitive documents</li>
+                    <li>• Private messages</li>
+                    <li>• Personal photos</li>
+                  </ul>
+                </Card>
+
+                <Card className="p-6">
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className="w-10 h-10 bg-green-100 dark:bg-green-900/20 rounded-lg flex items-center justify-center">
+                      <Laptop className="w-5 h-5 text-green-600" />
+                    </div>
+                    <h3 className="text-xl font-semibold">Business</h3>
+                  </div>
+                  <ul className="space-y-2 text-muted-foreground">
+                    <li>• Share API keys securely</li>
+                    <li>• Send confidential reports</li>
+                    <li>• Legal documents</li>
+                    <li>• Financial data</li>
+                  </ul>
+                </Card>
+
+                <Card className="p-6">
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/20 rounded-lg flex items-center justify-center">
+                      <Server className="w-5 h-5 text-purple-600" />
+                    </div>
+                    <h3 className="text-xl font-semibold">Development</h3>
+                  </div>
+                  <ul className="space-y-2 text-muted-foreground">
+                    <li>• Database credentials</li>
+                    <li>• Configuration files</li>
+                    <li>• Debug information</li>
+                  </ul>
+                </Card>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Developer API Section */}
+        <section className="py-20 bg-gradient-to-br from-primary/5 via-background to-blue-500/5">
+          <div className="container mx-auto px-4">
+            <div className="max-w-6xl mx-auto">
+              {/* Header */}
+              <div className="text-center mb-16">
+                <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary rounded-full text-sm font-medium mb-6">
+                  <Code className="w-4 h-4" />
+                  <span>Developer Tools</span>
+                </div>
+                <h2 className="text-4xl lg:text-5xl font-bold mb-6">
+                  Build with our{' '}
+                  <span className="bg-gradient-to-r from-primary to-blue-600 bg-clip-text text-transparent">
+                    Developer API
+                  </span>
+                </h2>
+                <p className="text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
+                  Integrate Blink's secure secret sharing into your applications with our powerful REST API. 
+                  Perfect for developers, DevOps teams, and enterprise applications.
+                </p>
+              </div>
+
+              {/* API Stats */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-16">
+                <div className="text-center">
+                  <div className="text-3xl font-bold text-primary mb-2">4</div>
+                  <div className="text-sm text-muted-foreground">REST Endpoints</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-3xl font-bold text-primary mb-2">256-bit</div>
+                  <div className="text-sm text-muted-foreground">AES Encryption</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-3xl font-bold text-primary mb-2">99.9%</div>
+                  <div className="text-sm text-muted-foreground">API Uptime</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-3xl font-bold text-primary mb-2">&lt;100ms</div>
+                  <div className="text-sm text-muted-foreground">Response Time</div>
+                </div>
+              </div>
+
+              {/* Main Content Grid */}
+              <div className="grid lg:grid-cols-3 gap-8 mb-16">
+                {/* Features */}
+                <div className="lg:col-span-1 space-y-6">
+                  <Card className="border-2 border-primary/20">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-xl">
+                        <Zap className="w-6 h-6 text-primary" />
+                        Why Choose Our API?
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                      <div className="space-y-4">
+                        <div className="flex items-start gap-3">
+                          <div className="w-10 h-10 bg-green-100 dark:bg-green-900/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                            <Shield className="w-5 h-5 text-green-600" />
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-lg">Enterprise Security</h4>
+                            <p className="text-sm text-muted-foreground">
+                              Military-grade encryption with zero-knowledge architecture
+                            </p>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-start gap-3">
+                          <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                            <Key className="w-5 h-5 text-blue-600" />
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-lg">Simple Authentication</h4>
+                            <p className="text-sm text-muted-foreground">
+                              API key-based auth with granular permissions
+                            </p>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-start gap-3">
+                          <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                            <Terminal className="w-5 h-5 text-purple-600" />
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-lg">Developer Friendly</h4>
+                            <p className="text-sm text-muted-foreground">
+                              RESTful design with comprehensive documentation
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start gap-3">
+                          <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                            <Clock className="w-5 h-5 text-orange-600" />
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-lg">Lightning Fast</h4>
+                            <p className="text-sm text-muted-foreground">
+                              Sub-100ms response times with global CDN
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Code Examples */}
+                <div className="lg:col-span-2 space-y-6">
+                  <Card className="border-2 border-blue-200 dark:border-blue-800">
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="flex items-center gap-2">
+                          <Code className="w-5 h-5" />
+                          Quick Start Examples
+                        </CardTitle>
+                        <Badge variant="outline" className="text-xs">Copy & Paste Ready</Badge>
+                      </div>
+                      <CardDescription>
+                        Get started in minutes with these copy-paste examples
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                      {/* JavaScript Example */}
+                      <div>
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                            <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                            <span className="text-sm font-medium ml-2">JavaScript/Node.js</span>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => copyCodeToClipboard(`// Create a text secret
+const response = await fetch('https://your-app.vercel.app/api/secrets', {
+  method: 'POST',
+  headers: {
+    'x-api-key': 'your-api-key',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    type: 'text',
+    content: 'My secret message',
+    expiry_minutes: 60
+  })
+});
+
+const secret = await response.json();
+console.log('Secret URL:', secret.view_url);`, 'js-example')}
+                            className="h-8 px-3"
+                          >
+                            {copiedCode === 'js-example' ? (
+                              <Check className="w-4 h-4" />
+                            ) : (
+                              <Copy className="w-4 h-4" />
+                            )}
+                          </Button>
+                        </div>
+                        <div className="bg-slate-900 text-slate-100 p-4 rounded-lg overflow-x-auto">
+                          <pre className="text-sm">
+{`// Create a text secret
+const response = await fetch('https://your-app.vercel.app/api/secrets', {
+  method: 'POST',
+  headers: {
+    'x-api-key': 'your-api-key',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    type: 'text',
+    content: 'My secret message',
+    expiry_minutes: 60
+  })
+});
+
+const secret = await response.json();
+console.log('Secret URL:', secret.view_url);`}
+                          </pre>
+                        </div>
+                      </div>
+
+                      {/* Python Example */}
+                      <div>
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                            <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                            <span className="text-sm font-medium ml-2">Python</span>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => copyCodeToClipboard(`import requests
+
+# Create a file secret
+response = requests.post(
+    'https://your-app.vercel.app/api/secrets',
+    headers={'x-api-key': 'your-api-key'},
+    json={
+        'type': 'file',
+        'file': {
+            'name': 'config.json',
+            'data': 'base64_encoded_content',
+            'size': 1024
+        },
+        'expiry_minutes': 30
+    }
+)
+
+secret = response.json()
+print(f"Secret URL: {secret['view_url']}")`, 'python-example')}
+                            className="h-8 px-3"
+                          >
+                            {copiedCode === 'python-example' ? (
+                              <Check className="w-4 h-4" />
+                            ) : (
+                              <Copy className="w-4 h-4" />
+                            )}
+                          </Button>
+                        </div>
+                        <div className="bg-slate-900 text-slate-100 p-4 rounded-lg overflow-x-auto">
+                          <pre className="text-sm">
+{`import requests
+
+# Create a file secret
+response = requests.post(
+    'https://your-app.vercel.app/api/secrets',
+    headers={'x-api-key': 'your-api-key'},
+    json={
+        'type': 'file',
+        'file': {
+            'name': 'config.json',
+            'data': 'base64_encoded_content',
+            'size': 1024
+        },
+        'expiry_minutes': 30
+    }
+)
+
+secret = response.json()
+print(f"Secret URL: {secret['view_url']}")`}
+                          </pre>
+                        </div>
+                      </div>
+
+                      {/* cURL Example */}
+                      <div>
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                            <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                            <span className="text-sm font-medium ml-2">cURL</span>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => copyCodeToClipboard(`# List all secrets
+curl -X GET https://your-app.vercel.app/api/secrets \\
+  -H "x-api-key: your-api-key" \\
+  -H "Accept: application/json"`, 'curl-example')}
+                            className="h-8 px-3"
+                          >
+                            {copiedCode === 'curl-example' ? (
+                              <Check className="w-4 h-4" />
+                            ) : (
+                              <Copy className="w-4 h-4" />
+                            )}
+                          </Button>
+                        </div>
+                        <div className="bg-slate-900 text-slate-100 p-4 rounded-lg overflow-x-auto">
+                          <pre className="text-sm">
+{`# List all secrets
+curl -X GET https://your-app.vercel.app/api/secrets \\
+  -H "x-api-key: your-api-key" \\
+  -H "Accept: application/json"`}
+                          </pre>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+
+              {/* API Endpoints */}
+              <div className="mb-16">
+                <h3 className="text-2xl font-bold text-center mb-8">API Endpoints</h3>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <Card className="hover:shadow-lg transition-shadow">
+                    <CardContent className="p-6">
+                      <div className="flex items-center gap-3 mb-3">
+                        <Badge className="bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400">POST</Badge>
+                        <code className="text-sm font-mono">/api/secrets</code>
+                      </div>
+                      <h4 className="font-semibold mb-2">Create Secret</h4>
+                      <p className="text-sm text-muted-foreground mb-3">
+                        Create a new text or file secret with custom expiry
+                      </p>
+                      <div className="text-xs text-muted-foreground">
+                        <strong>Body:</strong> type, content/file, expiry_minutes, password (optional)
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="hover:shadow-lg transition-shadow">
+                    <CardContent className="p-6">
+                      <div className="flex items-center gap-3 mb-3">
+                        <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400">GET</Badge>
+                        <code className="text-sm font-mono">/api/secrets</code>
+                      </div>
+                      <h4 className="font-semibold mb-2">List Secrets</h4>
+                      <p className="text-sm text-muted-foreground mb-3">
+                        Retrieve all secrets created with your API key
+                      </p>
+                      <div className="text-xs text-muted-foreground">
+                        <strong>Returns:</strong> Array of secret metadata
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="hover:shadow-lg transition-shadow">
+                    <CardContent className="p-6">
+                      <div className="flex items-center gap-3 mb-3">
+                        <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400">GET</Badge>
+                        <code className="text-sm font-mono">/api/secrets/:id</code>
+                      </div>
+                      <h4 className="font-semibold mb-2">Get Secret</h4>
+                      <p className="text-sm text-muted-foreground mb-3">
+                        Retrieve and decrypt a specific secret by ID
+                      </p>
+                      <div className="text-xs text-muted-foreground">
+                        <strong>Returns:</strong> Decrypted secret content
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="hover:shadow-lg transition-shadow">
+                    <CardContent className="p-6">
+                      <div className="flex items-center gap-3 mb-3">
+                        <Badge className="bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400">DELETE</Badge>
+                        <code className="text-sm font-mono">/api/secrets/:id</code>
+                      </div>
+                      <h4 className="font-semibold mb-2">Delete Secret</h4>
+                      <p className="text-sm text-muted-foreground mb-3">
+                        Permanently delete a secret and its data
+                      </p>
+                      <div className="text-xs text-muted-foreground">
+                        <strong>Returns:</strong> Success confirmation
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+
+              {/* CTA Section */}
+              <div className="text-center">
+                <Card className="max-w-4xl mx-auto border-2 border-primary/20 bg-gradient-to-r from-primary/5 to-blue-500/5">
+                  <CardContent className="pt-12 pb-12">
+                    <div className="space-y-6">
+                      <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
+                        <Code className="w-8 h-8 text-primary" />
+                      </div>
+                      <h3 className="text-3xl font-bold">Ready to Start Building?</h3>
+                      <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+                        Join thousands of developers who trust Blink for secure secret sharing. 
+                        Get your API key and start integrating in minutes.
+                      </p>
+                      <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                        {isSignedIn ? (
+                          <Button
+                            size="lg"
+                            className="text-lg px-8 py-6"
+                            onClick={() => navigate('/dashboard/api')}
+                          >
+                            <Key className="w-5 h-5 mr-2" />
+                            Get Your API Key
+                          </Button>
+                        ) : (
+                          <SignInButton mode="modal">
+                            <Button
+                              size="lg"
+                              className="text-lg px-8 py-6"
+                            >
+                              <Key className="w-5 h-5 mr-2" />
+                              Get Your API Key
+                            </Button>
+                          </SignInButton>
+                        )}
+                        <Button
+                          variant="outline"
+                          size="lg"
+                          className="text-lg px-8 py-6"
+                          onClick={() => navigate('/api-docs')}
+                        >
+                          <Code className="w-5 h-5 mr-2" />
+                          View Full Documentation
+                        </Button>
+                      </div>
+                      <div className="flex items-center justify-center gap-8 text-sm text-muted-foreground pt-4">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="w-4 h-4 text-green-500" />
+                          <span>Free to start</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="w-4 h-4 text-green-500" />
+                          <span>No credit card required</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="w-4 h-4 text-green-500" />
+                          <span>24/7 support</span>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          </div>
+        </section>
       </main>
+
+      <PublicFooter />
     </div>
   );
 }

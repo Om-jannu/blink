@@ -14,7 +14,8 @@ import {
   Shield,
   Crown,
   Key,
-  BarChart3
+  BarChart3,
+  Code
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/lib/store';
@@ -45,6 +46,11 @@ const navigation = [
     name: 'API Keys',
     href: '/dashboard/api',
     icon: Key,
+  },
+  {
+    name: 'API Docs',
+    href: '/api-docs',
+    icon: Code,
   },
   {
     name: 'Settings',

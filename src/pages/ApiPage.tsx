@@ -134,15 +134,15 @@ export default function ApiPage() {
   };
 
   const getExpiryStatus = (expiresAt: string | null) => {
-    if (!expiresAt) return { status: 'never', color: 'bg-gray-100' };
+    if (!expiresAt) return { status: 'never', color: 'bg-muted' };
     
     const expiry = new Date(expiresAt);
     const now = new Date();
     const daysUntilExpiry = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
     
-    if (daysUntilExpiry < 0) return { status: 'expired', color: 'bg-red-100' };
-    if (daysUntilExpiry <= 7) return { status: 'expiring', color: 'bg-yellow-100' };
-    return { status: 'active', color: 'bg-green-100' };
+    if (daysUntilExpiry < 0) return { status: 'expired', color: 'bg-destructive/10 text-destructive' };
+    if (daysUntilExpiry <= 7) return { status: 'expiring', color: 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400' };
+    return { status: 'active', color: 'bg-green-500/10 text-green-600 dark:text-green-400' };
   };
 
   if (loading) {
@@ -158,8 +158,8 @@ export default function ApiPage() {
           {[1, 2, 3].map((i) => (
             <Card key={i} className="animate-pulse">
               <CardContent className="p-6">
-                <div className="h-4 bg-gray-200 rounded w-1/4 mb-2"></div>
-                <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                <div className="h-4 bg-muted rounded w-1/4 mb-2"></div>
+                <div className="h-3 bg-muted rounded w-1/2"></div>
               </CardContent>
             </Card>
           ))}
@@ -279,22 +279,22 @@ export default function ApiPage() {
           <div className="space-y-4">
             <div className="flex items-center space-x-2">
               <Badge variant="outline">GET</Badge>
-              <code className="text-sm bg-gray-100 px-2 py-1 rounded">/api/secrets</code>
+              <code className="text-sm bg-muted px-2 py-1 rounded">/api/secrets</code>
               <span className="text-sm text-muted-foreground">List all secrets</span>
             </div>
             <div className="flex items-center space-x-2">
               <Badge variant="outline">POST</Badge>
-              <code className="text-sm bg-gray-100 px-2 py-1 rounded">/api/secrets</code>
+              <code className="text-sm bg-muted px-2 py-1 rounded">/api/secrets</code>
               <span className="text-sm text-muted-foreground">Create a new secret</span>
             </div>
             <div className="flex items-center space-x-2">
               <Badge variant="outline">GET</Badge>
-              <code className="text-sm bg-gray-100 px-2 py-1 rounded">/api/secrets/:id</code>
+              <code className="text-sm bg-muted px-2 py-1 rounded">/api/secrets/:id</code>
               <span className="text-sm text-muted-foreground">Get a specific secret</span>
             </div>
             <div className="flex items-center space-x-2">
               <Badge variant="outline">DELETE</Badge>
-              <code className="text-sm bg-gray-100 px-2 py-1 rounded">/api/secrets/:id</code>
+              <code className="text-sm bg-muted px-2 py-1 rounded">/api/secrets/:id</code>
               <span className="text-sm text-muted-foreground">Delete a secret</span>
             </div>
             <div className="mt-4">
@@ -331,7 +331,7 @@ export default function ApiPage() {
                         <h3 className="font-semibold">{key.name}</h3>
                         <Badge 
                           variant={key.is_active ? "default" : "secondary"}
-                          className={key.is_active ? "bg-green-100 text-green-800" : ""}
+                          className={key.is_active ? "bg-green-500/10 text-green-600 dark:text-green-400" : ""}
                         >
                           {key.is_active ? 'Active' : 'Inactive'}
                         </Badge>
@@ -352,19 +352,19 @@ export default function ApiPage() {
                       <div className="flex items-center space-x-4 text-sm">
                         <div className="flex items-center space-x-1">
                           <Shield className="w-3 h-3" />
-                          <span className={key.permissions.read ? "text-green-600" : "text-gray-400"}>
+                          <span className={key.permissions.read ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}>
                             Read
                           </span>
                         </div>
                         <div className="flex items-center space-x-1">
                           <Key className="w-3 h-3" />
-                          <span className={key.permissions.write ? "text-green-600" : "text-gray-400"}>
+                          <span className={key.permissions.write ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}>
                             Write
                           </span>
                         </div>
                         <div className="flex items-center space-x-1">
                           <Trash2 className="w-3 h-3" />
-                          <span className={key.permissions.delete ? "text-green-600" : "text-gray-400"}>
+                          <span className={key.permissions.delete ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}>
                             Delete
                           </span>
                         </div>
@@ -384,7 +384,7 @@ export default function ApiPage() {
                         variant="outline"
                         size="sm"
                         onClick={() => handleDeleteKey(key.id)}
-                        className="text-red-600 hover:text-red-700"
+                        className="text-destructive hover:text-destructive/80"
                       >
                         <Trash2 className="w-3 h-3" />
                       </Button>
@@ -424,8 +424,8 @@ export default function ApiPage() {
                 </Button>
               </div>
             </div>
-            <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
-              <p className="text-sm text-yellow-800">
+            <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-md p-3">
+              <p className="text-sm text-yellow-600 dark:text-yellow-400">
                 <strong>Important:</strong> This is the only time you'll see this API key. 
                 Make sure to copy and store it securely.
               </p>

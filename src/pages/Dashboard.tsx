@@ -167,7 +167,7 @@ export function Dashboard() {
               {isUpgrading ? 'Upgrading...' : 'Upgrade to Pro (Dev)'}
             </Button>
           ) : (
-            <Button variant="outline" onClick={() => (window.location.href = '/dashboard/settings')}>
+            <Button variant="outline" onClick={() => navigate('/dashboard/settings')}>
               Manage Subscription
             </Button>
           )}

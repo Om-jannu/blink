@@ -1,32 +1,20 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { ThemeProvider } from './lib/theme-provider';
 import { AuthProvider } from './lib/auth-provider';
-import { useAuth } from '@clerk/clerk-react';
 import { DashboardLayout } from './components/DashboardLayout';
+import { ProtectedRouteWithModal } from './components/ProtectedRouteWithModal';
 import { Dashboard } from './pages/Dashboard';
 import { MySecretsPage } from './pages/MySecretsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { LandingPage } from './pages/LandingPage';
+import { SecretViewPage } from './pages/SecretViewPage';
 import { NotFoundPage } from './pages/NotFoundPage';
+import { ApiDocs } from './pages/ApiDocs';
 import AnalyticsDashboard from './pages/AnalyticsDashboard';
 import ApiPage from './pages/ApiPage';
 import './App.css';
 
 
-// Protected Route Component
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isSignedIn, isLoaded } = useAuth();
-
-  if (!isLoaded) {
-    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
-  }
-
-  if (!isSignedIn) {
-    return <Navigate to="/" replace />;
-  }
-
-  return <>{children}</>;
-}
 
 // Main App Component
 function App() {
@@ -34,55 +22,56 @@ function App() {
     <Router>
       <Routes>
         <Route path="/" element={<LandingPage />} />
-        <Route path="/view/:id" element={<LandingPage />} />
+        <Route path="/view/:id" element={<SecretViewPage />} />
+        <Route path="/api-docs" element={<ApiDocs />} />
         <Route
           path="/dashboard"
           element={
-            <ProtectedRoute>
+            <ProtectedRouteWithModal>
               <DashboardLayout>
                 <Dashboard />
               </DashboardLayout>
-            </ProtectedRoute>
+            </ProtectedRouteWithModal>
           }
         />
         <Route
           path="/dashboard/secrets"
           element={
-            <ProtectedRoute>
+            <ProtectedRouteWithModal>
               <DashboardLayout>
                 <MySecretsPage />
               </DashboardLayout>
-            </ProtectedRoute>
+            </ProtectedRouteWithModal>
           }
         />
         <Route
           path="/dashboard/analytics"
           element={
-            <ProtectedRoute>
+            <ProtectedRouteWithModal>
               <DashboardLayout>
                 <AnalyticsDashboard />
               </DashboardLayout>
-            </ProtectedRoute>
+            </ProtectedRouteWithModal>
           }
         />
         <Route
           path="/dashboard/api"
           element={
-            <ProtectedRoute>
+            <ProtectedRouteWithModal>
               <DashboardLayout>
                 <ApiPage />
               </DashboardLayout>
-            </ProtectedRoute>
+            </ProtectedRouteWithModal>
           }
         />
         <Route
           path="/dashboard/settings"
           element={
-            <ProtectedRoute>
+            <ProtectedRouteWithModal>
               <DashboardLayout>
                 <SettingsPage />
               </DashboardLayout>
-            </ProtectedRoute>
+            </ProtectedRouteWithModal>
           }
         />
         <Route path="*" element={<NotFoundPage />} />

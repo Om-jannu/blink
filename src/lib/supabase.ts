@@ -21,20 +21,6 @@ export interface Secret {
   created_at: string;
 }
 
-export interface BlinkUser {
-  id: string;                // UUID
-  clerk_user_id: string;     // Clerk user id
-  created_at: string;
-}
-
-export interface Subscription {
-  user_id: string;
-  plan: 'free' | 'pro';
-  status: 'active' | 'canceled' | 'past_due' | 'trialing';
-  current_period_end?: string; // ISO timestamp
-  updated_at: string;
-}
-
 export interface CreateSecretData {
   type: 'text' | 'file';
   encrypted_content: string;
@@ -44,6 +30,21 @@ export interface CreateSecretData {
   password_hash?: string;
   encryption_key_or_salt: string; // Salt for password-protected, encryption key for non-password
   owner_user_id?: string;      // UUID FK to blink_users.id
+}
+
+export interface BlinkUser {
+  id: string;
+  clerk_user_id: string;
+  created_at: string;
+}
+
+export interface Subscription {
+  id: string;
+  user_id: string;
+  plan: 'free' | 'pro';
+  status: 'active' | 'canceled' | 'past_due' | 'trialing';
+  current_period_end?: string;
+  created_at: string;
 }
 
 /**
@@ -422,7 +423,7 @@ export async function upsertBlinkUser(clerkUserId: string): Promise<{ user: Blin
   }
 }
 
-export async function upsertUserSubscription(sub: Omit<Subscription, 'updated_at'>): Promise<{ success: boolean; error?: string }> {
+export async function upsertUserSubscription(sub: Partial<Subscription> & { user_id: string; plan: 'free' | 'pro'; status: 'active' | 'canceled' | 'past_due' | 'trialing' }): Promise<{ success: boolean; error?: string }> {
   try {
     // For free users, explicitly set current_period_end to null
     const subscriptionData = {

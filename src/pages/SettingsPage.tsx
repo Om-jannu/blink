@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useUser } from '@clerk/clerk-react';
 import { useStore } from '@/lib/store';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -22,6 +23,7 @@ import { toast } from 'sonner';
 
 export function SettingsPage() {
   const { user } = useUser();
+  const navigate = useNavigate();
   const { blinkUserId, userPlan, setUserPlan, subscriptionStatus, setSubscriptionStatus } = useStore();
   const [settings, setSettings] = useState({
     emailNotifications: true,
@@ -143,7 +145,7 @@ export function SettingsPage() {
       // In a real app, you'd call an API to delete the account
       console.log('Account deletion requested');
       // For now, just sign out
-      window.location.href = '/';
+      navigate('/');
     } catch (error) {
       console.error('Account deletion failed:', error);
     } finally {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@clerk/clerk-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,6 +21,7 @@ import { useStore } from '@/lib/store';
 
 export function SecretsPage() {
   const { userId } = useAuth();
+  const navigate = useNavigate();
   const { userSecrets, setUserSecrets, setSecretsLoading, blinkUserId } = useStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'text' | 'file'>('all');
@@ -222,7 +224,7 @@ export function SecretsPage() {
               <Eye className="w-16 h-16 mx-auto mb-4 opacity-50" />
               <h3 className="text-lg font-medium mb-2">No secrets found</h3>
               <p className="mb-4">You haven't created any secrets yet.</p>
-              <Button onClick={() => window.location.href = '/'}>
+              <Button onClick={() => navigate('/')}>
                 Create Your First Secret
               </Button>
             </div>
